@@ -25,7 +25,7 @@ bool Sphere::hit(const Ray& ray, float tMin, float tMax, HitData* const hitData)
 
     hitData->t = root;
     hitData->position = ray.at(root);
-    hitData->normal = (hitData->position - position) * (1.0f / radius);
+    hitData->normal = (hitData->position - position) / radius;
 
     return true;
 }
