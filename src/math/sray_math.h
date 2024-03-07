@@ -65,3 +65,11 @@ struct Ray {
     }
 };
 
+/* Converters */
+inline uint32_t rgbToHex(Vec3 color) {
+    const uint8_t r = (uint8_t)(color.x * 255.0f);
+    const uint8_t g = (uint8_t)(color.y * 255.0f);
+    const uint8_t b = (uint8_t)(color.z * 255.0f);
+
+    return 0xff000000 | (b << 16) | (g << 8) | r;
+}
