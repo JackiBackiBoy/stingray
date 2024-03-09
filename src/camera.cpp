@@ -1,4 +1,5 @@
 #include "camera.h"
+#include "material.h"
 
 #include <algorithm>
 #include <limits>
@@ -18,11 +19,17 @@ void Camera::render(const Scene& scene, uint32_t* const imageBuffer) {
 
             for (int sample = 0; sample < samplesPerPixel; ++sample) {
                 const Ray ray = generateRay(x, y);
-                pixelColor += computeColor(ray, scene);
+                pixelColor += computeColor(ray, scene, maxDepth);
             }
 
-            float scale = 1.0f / samplesPerPixel;
+            const float scale = 1.0f / samplesPerPixel;
             pixelColor *= scale;
+
+            // Linear to Gamma space transform
+            pixelColor.x = linearToGamma(pixelColor.x);
+            pixelColor.y = linearToGamma(pixelColor.y);
+            pixelColor.z = linearToGamma(pixelColor.z);
+
             pixelColor.x = std::clamp(pixelColor.x, 0.0f, 0.999f);
             pixelColor.y = std::clamp(pixelColor.y, 0.0f, 0.999f);
             pixelColor.z = std::clamp(pixelColor.z, 0.0f, 0.999f);
@@ -33,36 +40,48 @@ void Camera::render(const Scene& scene, uint32_t* const imageBuffer) {
 }
 
 void Camera::initialize() {
-    const float focalLength = 1.0f;
-    const float viewportHeight = 2.0f;
+    const float focalLength = (position - lookAt).length();
+    const float h = tanf(verticalFOV * 0.5f);
+    const float viewportHeight = 2.0f * h * focalLength;
     const float viewportWidth = viewportHeight * m_AspectRatio;
 
-    const Vec3 viewportX = { viewportWidth, 0.0f, 0.0f };
-    const Vec3 viewportY = { 0.0f, -viewportHeight, 0.0f };
+    w = normalize(position - lookAt);
+    u = normalize(cross(up, w));
+    v = cross(w, u);
+
+    const Vec3 viewportX = viewportWidth * u;
+    const Vec3 viewportY = viewportHeight * -v;
     const Vec3 viewportTopLeft =
-        position - Vec3{0.0f, 0.0f, focalLength} - viewportX / 2 - viewportY / 2;
+        position - (focalLength * w) - 0.5f * (viewportX + viewportY);
 
     m_PixelDeltaX = viewportX / (float)imageWidth;
     m_PixelDeltaY = viewportY / (float)imageHeight;
     m_PixelTopLeft = viewportTopLeft + 0.5f * (m_PixelDeltaX + m_PixelDeltaY);
 }
 
-Vec3 Camera::computeColor(const Ray& ray, const Scene& scene) const {
+Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
     HitData hit{};
 
-    if (scene.hit(ray, 0.0f, std::numeric_limits<float>::infinity(), &hit)) {
-        const Vec3 bounceDir = randomHemisphereVec3(hit.normal);
-
-        // Note: Due to floating point imprecisions we must add an
-        // arbitrary value (epsilon) to the intersection point
-        // in order to eliminate self-intersection
-        const float epsilon = 0.0001f;
-        const Vec3 intersectionPoint = hit.position + epsilon * hit.normal;
-
-        return 0.5f * computeColor(Ray{intersectionPoint, bounceDir}, scene);
+    if (depth <= 0) {
+        return { 0.0f, 0.0f, 0.0f };
     }
 
-    Vec3 unit_direction = normalize(ray.dir);
+    // Note: Due to floating point rounding errors, we must add an
+    // arbitrary value (epsilon) to the intersection point
+    // in order to eliminate self-intersection
+    const float epsilon = 0.0001f;
+    if (scene.hit(ray, epsilon, std::numeric_limits<float>::infinity(), &hit)) {
+        Ray scattered{};
+        Vec3 attenuation{};
+
+        if (hit.material->scatter(ray, hit, &attenuation, &scattered)) {
+            return attenuation * computeColor(scattered, scene, depth - 1);
+        }
+
+        return { 0.0f, 0.0f, 0.0f };
+    }
+
+    const Vec3 unit_direction = normalize(ray.dir);
     const float a = 0.5 * (unit_direction.y + 1.0);
     return (1.0 - a)* Vec3{1.0, 1.0, 1.0} + a * Vec3{0.5, 0.7, 1.0};
 }

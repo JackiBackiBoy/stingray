@@ -25,7 +25,10 @@ bool Sphere::hit(const Ray& ray, float tMin, float tMax, HitData* const hitData)
 
     hitData->t = root;
     hitData->position = ray.at(root);
-    hitData->normal = (hitData->position - position) / radius;
+
+    const Vec3 outwardNormal = (hitData->position - position) / radius;
+    hitData->setNormal(ray, outwardNormal);
+    hitData->material = material;
 
     return true;
 }

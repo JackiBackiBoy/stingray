@@ -7,6 +7,7 @@
 #include "vendor/stb_image_write.h"
 
 #include "camera.h"
+#include "material.h"
 #include "scene.h"
 #include "sphere.h"
 #include "math/sray_math.h"
@@ -26,11 +27,32 @@ int main(int argc, char* argv[]) {
 
     std::vector<uint32_t> pixels(width * height, 0xff000000); // black background
 
-    m_Camera = std::make_unique<Camera>(width, height);
+    // Materials
+    DiffuseMaterial materialGround({ 0.8f, 0.8f, 0.0f });
+    DiffuseMaterial materialCenter({ 0.1f, 0.2f, 0.5f });
+    DielectricMaterial materialLeft(1.5f);
+    MetalMaterial materialRight({ 0.8f, 0.6f, 0.2f }, 0.0f);
+
+    // Scene
+    Sphere ground(Vec3{ 0.0f, -100.5f, -1.0f }, 100.0f, &materialGround);
+    Sphere center(Vec3{ 0.0f, 0.0f, -1.0f }, 0.5f, &materialCenter);
+    Sphere left(Vec3{ -1.0f, 0.0f, -1.0f }, 0.5f, &materialLeft);
+    Sphere leftBubble(Vec3{ -1.0f, 0.0f, -1.0f }, -0.4f, &materialLeft);
+    Sphere right(Vec3{ 1.0f, 0.0f, -1.0f }, 0.5f, &materialRight);
 
     m_Scene = std::make_unique<Scene>();
-    m_Scene->add(std::make_shared<Sphere>(Vec3{ 0.0f, 0.0f, -1.0f }, 0.5f));
-    m_Scene->add(std::make_shared<Sphere>(Vec3{ 0.0f, -100.5f, -1.0f }, 100.0f));
+    m_Scene->add(&ground);
+    m_Scene->add(&center);
+    m_Scene->add(&left);
+    m_Scene->add(&leftBubble);
+    m_Scene->add(&right);
+
+    m_Camera = std::make_unique<Camera>(width, height);
+    m_Camera->maxDepth = 50;
+    m_Camera->position = { -2.0f, 2.0f, 1.0f };
+    m_Camera->lookAt = { 0.0f, 0.0f, -1.0f };
+    m_Camera->up = { 0.0f, 1.0f, 0.0f };
+    m_Camera->verticalFOV = Pi * 0.2f;
 
     m_Camera->render(*m_Scene, pixels.data());
 

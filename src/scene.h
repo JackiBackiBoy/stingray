@@ -5,9 +5,9 @@
 #include "hittable.h"
 
 struct Scene {
-    std::vector<std::shared_ptr<Hittable>> objects;
+    std::vector<Hittable*> objects;
 
-    inline void add(std::shared_ptr<Hittable> object) {
+    inline void add(Hittable* object) {
         objects.push_back(object);
     }
 

@@ -2,10 +2,19 @@
 
 #include "math/sray_math.h"
 
+class Material;
+
 struct HitData {
     Vec3 position{};
     Vec3 normal{};
-    float t = 0.0;
+    Material* material = nullptr;
+    float t = 0.0f;
+    bool frontFace = false;
+
+    inline void setNormal(const Ray& ray, const Vec3& outwardNormal) {
+        frontFace = dot(ray.dir, outwardNormal) < 0;
+        normal = frontFace ? outwardNormal : -outwardNormal;
+    }
 };
 
 class Hittable {

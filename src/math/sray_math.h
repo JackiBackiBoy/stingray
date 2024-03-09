@@ -4,6 +4,10 @@
 #include <cstdint>
 #include <cstdlib>
 
+/* Constants */
+constexpr float Pi = 3.141592653589793238462643383279502884e+00F;
+
+/* Vectors */
 struct Vec2 {
     float x = 0.0f;
     float y = 0.0f;
@@ -30,6 +34,13 @@ struct Vec3 {
         z *= scalar;
 
         return *this;
+    }
+
+    inline float length() const { return sqrtf(x*x + y*y + z*z); }
+
+    inline bool isNearZero() const {
+        float epsilon = 0.000001f;
+        return (x < epsilon) && (y < epsilon) && (z < epsilon);
     }
 };
 
@@ -72,6 +83,11 @@ inline Vec3 operator*(float scalar, const Vec3& u) {
     return u * scalar;
 }
 
+// Note: Component-wise multiplication
+inline Vec3 operator*(const Vec3& u, const Vec3& v) {
+    return { u.x * v.x, u.y * v.y, u.z * v.z };
+}
+
 inline Vec3 operator/(const Vec3& u, float divisor) {
     return { u.x / divisor, u.y / divisor, u.z / divisor };
 }
@@ -80,8 +96,28 @@ inline float dot(const Vec3& u, const Vec3& v) {
     return u.x * v.x + u.y * v.y + u.z * v.z;
 }
 
+inline Vec3 cross(const Vec3& u, const Vec3& v) {
+    return {
+        u.y * v.z - u.z * v.y,
+        u.z * v.x - u.x * v.z,
+        u.x * v.y - u.y * v.x
+    };
+}
+
 inline Vec3 normalize(const Vec3& u) {
     return (1.0f / sqrtf(u.x * u.x + u.y * u.y + u.z * u.z)) * u;
+}
+
+inline Vec3 reflect(const Vec3& u, const Vec3& n) {
+    return u - 2.0f * dot(u, n) * n;
+}
+
+inline Vec3 refract(const Vec3& uv, const Vec3& n, float etaiOverEtat) {
+    const float cosTheta = fmin(dot(-uv, n), 1.0f);
+    const Vec3 rOutPerpendicular = etaiOverEtat * (uv + cosTheta * n);
+    const Vec3 rOutParallel = -sqrtf(fabs(1.0f - dot(rOutPerpendicular, rOutPerpendicular))) * n;
+
+    return rOutPerpendicular + rOutParallel;
 }
 
 struct Ray {
@@ -141,4 +177,17 @@ inline uint32_t rgbToHex(Vec3 color) {
     const uint8_t b = (uint8_t)(color.z * 255.0f);
 
     return 0xff000000 | (b << 16) | (g << 8) | r;
+}
+
+/* Color Spaces */
+inline float linearToGamma(float linearComponent) {
+    return sqrtf(linearComponent);
+}
+
+/* Approximations */
+inline float schlickReflectance(float cosine, float refractionIndex) {
+    float r0 = (1.0f - refractionIndex) / (1.0f + refractionIndex);
+    r0 *= r0;
+
+    return r0 + (1.0f - r0) * powf((1.0f - cosine), 5.0f);
 }

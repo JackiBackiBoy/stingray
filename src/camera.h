@@ -8,7 +8,11 @@ public:
     Camera(int width, int height);
     ~Camera() {};
 
-    Vec3 position = { 0.0f, 0.0f, 0.0f };
+    Vec3 position = { 0.0f, 0.0f, -1.0f };
+    Vec3 lookAt = { 0.0f, 0.0f, 0.0f };
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    float verticalFOV = Pi * 0.5f;
+
     int imageWidth = 128;
     int imageHeight = 128;
     int samplesPerPixel = 100;
@@ -18,7 +22,7 @@ public:
 
 private:
     void initialize();
-    Vec3 computeColor(const Ray& ray, const Scene& scene) const;
+    Vec3 computeColor(const Ray& ray, const Scene& scene, int depth) const;
     Ray generateRay(int x, int y) const;
     Vec3 pixelSampleSquare() const;
 
@@ -26,4 +30,5 @@ private:
     Vec3 m_PixelDeltaX{};
     Vec3 m_PixelDeltaY{};
     Vec3 m_PixelTopLeft{};
+    Vec3 u{}, v{}, w{}; // basis vectors
 };
