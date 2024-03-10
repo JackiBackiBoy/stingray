@@ -13,9 +13,6 @@
 #include "math/sray_math.h"
 #include "utility/perfTimer.h"
 
-static std::unique_ptr<Camera> m_Camera{};
-static std::unique_ptr<Scene> m_Scene{};
-
 int main(int argc, char* argv[]) {
     int width = 0;
     int height = 0;
@@ -27,34 +24,59 @@ int main(int argc, char* argv[]) {
 
     std::vector<uint32_t> pixels(width * height, 0xff000000); // black background
 
+    Scene m_Scene{};
+    Camera m_Camera(width, height);
+
     // Materials
-    DiffuseMaterial materialGround({ 0.8f, 0.8f, 0.0f });
-    DiffuseMaterial materialCenter({ 0.1f, 0.2f, 0.5f });
+    DiffuseMaterial materialGround({ 0.3f, 0.3f, 0.3f });
+    DiffuseMaterial materialCenter({ 0.4f, 0.2f, 0.1f });
     DielectricMaterial materialLeft(1.5f);
-    MetalMaterial materialRight({ 0.8f, 0.6f, 0.2f }, 0.0f);
+    MetalMaterial materialRight({ 0.7f, 0.6f, 0.5f }, 0.0f);
 
     // Scene
-    Sphere ground(Vec3{ 0.0f, -100.5f, -1.0f }, 100.0f, &materialGround);
-    Sphere center(Vec3{ 0.0f, 0.0f, -1.0f }, 0.5f, &materialCenter);
-    Sphere left(Vec3{ -1.0f, 0.0f, -1.0f }, 0.5f, &materialLeft);
-    Sphere leftBubble(Vec3{ -1.0f, 0.0f, -1.0f }, -0.4f, &materialLeft);
-    Sphere right(Vec3{ 1.0f, 0.0f, -1.0f }, 0.5f, &materialRight);
+    Sphere left(Vec3{ 0.0f, 1.0f, 0.0f }, 1.0f, &materialLeft);
+    Sphere center(Vec3{ -4.0f, 1.0f, 0.0f }, 1.0f, &materialCenter);
+    Sphere right(Vec3{ 4.0f, 1.0f, 0.0f }, 1.0f, &materialRight);
+    Sphere ground(Vec3{ 0.0f, -1000.0f, 0.0f }, 1000.0f, &materialGround);
 
-    m_Scene = std::make_unique<Scene>();
-    m_Scene->add(&ground);
-    m_Scene->add(&center);
-    m_Scene->add(&left);
-    m_Scene->add(&leftBubble);
-    m_Scene->add(&right);
+    m_Scene.add(&ground);
+    m_Scene.add(&center);
+    m_Scene.add(&left);
+    m_Scene.add(&right);
 
-    m_Camera = std::make_unique<Camera>(width, height);
-    m_Camera->maxDepth = 50;
-    m_Camera->position = { -2.0f, 2.0f, 1.0f };
-    m_Camera->lookAt = { 0.0f, 0.0f, -1.0f };
-    m_Camera->up = { 0.0f, 1.0f, 0.0f };
-    m_Camera->verticalFOV = Pi * 0.2f;
+    // Randomize spheres
+    std::vector<DiffuseMaterial> sphereMaterials{};
+    sphereMaterials.reserve(100);
+    std::vector<Sphere> spheres{};
+    spheres.reserve(100);
 
-    m_Camera->render(*m_Scene, pixels.data());
+    for (size_t i = 0; i < 100; ++i) {
+        DiffuseMaterial material({ randomFloat(), randomFloat(), randomFloat() });
+        sphereMaterials.push_back(material);
+
+        const Vec3 p = { randomFloat(-7.0f, 7.0f), 0.2f, randomFloat(-7.0f, 7.0f) };
+
+        Sphere sphere(p, 0.2f, &sphereMaterials[i]);
+        spheres.push_back(sphere);
+
+        m_Scene.add(&spheres[i]);
+    }
+
+    m_Camera.maxDepth = 50;
+    m_Camera.position = { 13.0f, 2.0f, 3.0f };
+    m_Camera.lookAt = { 0.0f, 0.0f, 0.0f };
+    m_Camera.up = { 0.0f, 1.0f, 0.0f };
+    m_Camera.verticalFOV = toRadians(20.0f);
+    m_Camera.defocusAngle = toRadians(0.0f);
+    m_Camera.focusDistance = 10.0f;
+    m_Camera.samplesPerPixel = 100;
+
+    PerfTimer timer{};
+    timer.begin();
+    m_Camera.render(m_Scene, pixels.data());
+    timer.end();
+
+    std::cout << timer.getElapsedTime() << '\n';
 
     stbi_write_png("image.png", width, height, 4, pixels.data(), width * 4);
 

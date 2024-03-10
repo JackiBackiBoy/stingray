@@ -6,6 +6,7 @@
 
 /* Constants */
 constexpr float Pi = 3.141592653589793238462643383279502884e+00F;
+constexpr float PiOver180 = Pi / 180.0f;
 
 /* Vectors */
 struct Vec2 {
@@ -170,6 +171,16 @@ inline Vec3 randomHemisphereVec3(const Vec3& normal) {
     return -onUnitSphere;
 }
 
+inline Vec3 randomVec3InUnitDisk() {
+    while (true) {
+        const Vec3 p = { randomFloat(-1.0f, 1.0f), randomFloat(-1.0f, 1.0f), 0.0f };
+
+        if (dot(p, p) < 1.0f) {
+            return p;
+        }
+    }
+}
+
 /* Converters */
 inline uint32_t rgbToHex(Vec3 color) {
     const uint8_t r = (uint8_t)(color.x * 255.0f);
@@ -177,6 +188,10 @@ inline uint32_t rgbToHex(Vec3 color) {
     const uint8_t b = (uint8_t)(color.z * 255.0f);
 
     return 0xff000000 | (b << 16) | (g << 8) | r;
+}
+
+inline float toRadians(float deg) {
+    return PiOver180 * deg;
 }
 
 /* Color Spaces */

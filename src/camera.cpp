@@ -40,23 +40,26 @@ void Camera::render(const Scene& scene, uint32_t* const imageBuffer) {
 }
 
 void Camera::initialize() {
-    const float focalLength = (position - lookAt).length();
     const float h = tanf(verticalFOV * 0.5f);
-    const float viewportHeight = 2.0f * h * focalLength;
+    const float viewportHeight = 2.0f * h * focusDistance;
     const float viewportWidth = viewportHeight * m_AspectRatio;
 
-    w = normalize(position - lookAt);
-    u = normalize(cross(up, w));
-    v = cross(w, u);
+    m_W = normalize(position - lookAt);
+    m_U = normalize(cross(up, m_W));
+    m_V = cross(m_W, m_U);
 
-    const Vec3 viewportX = viewportWidth * u;
-    const Vec3 viewportY = viewportHeight * -v;
+    const Vec3 viewportX = viewportWidth * m_U;
+    const Vec3 viewportY = viewportHeight * -m_V;
     const Vec3 viewportTopLeft =
-        position - (focalLength * w) - 0.5f * (viewportX + viewportY);
+        position - (focusDistance * m_W) - 0.5f * (viewportX + viewportY);
 
     m_PixelDeltaX = viewportX / (float)imageWidth;
     m_PixelDeltaY = viewportY / (float)imageHeight;
     m_PixelTopLeft = viewportTopLeft + 0.5f * (m_PixelDeltaX + m_PixelDeltaY);
+
+    const float defocusRadius = focusDistance * tanf(defocusAngle * 0.5f);
+    m_DefocusDiskX = m_U * defocusRadius;
+    m_DefocusDiskY = m_V * defocusRadius;
 }
 
 Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
@@ -69,7 +72,7 @@ Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
     // Note: Due to floating point rounding errors, we must add an
     // arbitrary value (epsilon) to the intersection point
     // in order to eliminate self-intersection
-    const float epsilon = 0.0001f;
+    const float epsilon = 0.001f;
     if (scene.hit(ray, epsilon, std::numeric_limits<float>::infinity(), &hit)) {
         Ray scattered{};
         Vec3 attenuation{};
@@ -90,7 +93,7 @@ Ray Camera::generateRay(int x, int y) const {
     const Vec3 pixelCenter = m_PixelTopLeft + (x * m_PixelDeltaX) + (y * m_PixelDeltaY);
     const Vec3 pixelSample = pixelCenter + pixelSampleSquare();
 
-    const Vec3 rayOrigin = position;
+    const Vec3 rayOrigin = (defocusAngle > 0.0f) ? defocusDiskSample() : position;
     const Vec3 rayDir = pixelSample - rayOrigin;
 
     return { rayOrigin, rayDir };
@@ -102,3 +105,10 @@ Vec3 Camera::pixelSampleSquare() const {
 
     return x * m_PixelDeltaX + y * m_PixelDeltaY;
 }
+
+Vec3 Camera::defocusDiskSample() const {
+    const Vec3 p = randomVec3InUnitDisk();
+
+    return position + (p.x * m_DefocusDiskX) + (p.y * m_DefocusDiskY);
+}
+

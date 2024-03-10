@@ -12,6 +12,8 @@ public:
     Vec3 lookAt = { 0.0f, 0.0f, 0.0f };
     Vec3 up = { 0.0f, 1.0f, 0.0f };
     float verticalFOV = Pi * 0.5f;
+    float defocusAngle = 0.0f;
+    float focusDistance = 10.0f;
 
     int imageWidth = 128;
     int imageHeight = 128;
@@ -25,10 +27,13 @@ private:
     Vec3 computeColor(const Ray& ray, const Scene& scene, int depth) const;
     Ray generateRay(int x, int y) const;
     Vec3 pixelSampleSquare() const;
+    Vec3 defocusDiskSample() const;
 
     float m_AspectRatio = 1.0f;
     Vec3 m_PixelDeltaX{};
     Vec3 m_PixelDeltaY{};
     Vec3 m_PixelTopLeft{};
-    Vec3 u{}, v{}, w{}; // basis vectors
+    Vec3 m_U{}, m_V{}, m_W{}; // basis vectors
+    Vec3 m_DefocusDiskX{};
+    Vec3 m_DefocusDiskY{};
 };
