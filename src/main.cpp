@@ -1,6 +1,9 @@
 #include <cstdint>
-#include <limits>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <unordered_map>
 #include <vector>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -13,7 +16,64 @@
 #include "math/sray_math.h"
 #include "utility/perfTimer.h"
 
+struct Settings {
+    int numThreads = 1;
+};
+
+// Note: All argument params either support 1 or 0 input entries
+// in this implementation
+const std::unordered_map<std::string, bool> argParamsAcceptInput = {
+    { "-t", true }
+};
+
+void parseArgsToSettings(int argc, char* argv[], Settings& settings) {
+    const std::vector<std::string> args(argv + 1, argv + argc);
+
+    if (argc > 32) {
+        throw std::runtime_error("INPUT ERROR: Too many input arguments!");
+    }
+
+    int currArgParamCounter = 0;
+    std::string currArg = "";
+
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (currArgParamCounter > 0) {
+            currArgParamCounter--;
+        }
+
+        auto search = argParamsAcceptInput.find(args[i]);
+
+        if (search == argParamsAcceptInput.end() && currArg == "") {
+            throw std::runtime_error("ERROR!");
+        }
+
+        if (currArg == "") {
+            currArg = search->first;
+            
+            if (search->second) {
+                currArgParamCounter = 1;
+            }
+        }
+
+        if (currArg == "-t" && currArgParamCounter == 0) {
+            settings.numThreads = std::stoi(args[i]);
+            std::cout << "Setting thread count to: " << args[i] << '\n';
+
+            currArg = "";
+        }
+    }
+
+    if (currArgParamCounter != 0) {
+        std::cout << "Args missing\n";
+    }
+}
+
 int main(int argc, char* argv[]) {
+    Settings settings{};
+    parseArgsToSettings(argc, argv, settings);
+
+    std::cout << "Max number of threads: " << std::thread::hardware_concurrency() << '\n';
+
     int width = 0;
     int height = 0;
 
@@ -70,6 +130,7 @@ int main(int argc, char* argv[]) {
     m_Camera.defocusAngle = toRadians(0.0f);
     m_Camera.focusDistance = 10.0f;
     m_Camera.samplesPerPixel = 100;
+    m_Camera.numThreads = settings.numThreads;
 
     PerfTimer timer{};
     timer.begin();

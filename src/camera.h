@@ -19,11 +19,21 @@ public:
     int imageHeight = 128;
     int samplesPerPixel = 100;
     int maxDepth = 10;
+    int numThreads = 1;
 
     void render(const Scene& scene, uint32_t* const imageBuffer);
 
 private:
     void initialize();
+    static void renderChunk(
+        uint32_t* const imageBuffer,
+        int yStart,
+        int numRows,
+        int imageWidth,
+        const Scene& scene,
+        Camera* camera
+    );
+
     Vec3 computeColor(const Ray& ray, const Scene& scene, int depth) const;
     Ray generateRay(int x, int y) const;
     Vec3 pixelSampleSquare() const;

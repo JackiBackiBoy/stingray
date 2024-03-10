@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <thread>
 
 Camera::Camera(int width, int height) :
     imageWidth(width), imageHeight(height) {
@@ -13,28 +14,42 @@ Camera::Camera(int width, int height) :
 void Camera::render(const Scene& scene, uint32_t* const imageBuffer) {
     initialize();
 
-    for (int y = 0; y < imageHeight; ++y) {
-        for (int x = 0; x < imageWidth; ++x) {
-            Vec3 pixelColor = { 0.0f, 0.0f, 0.0f };
+    // Note: Given N threads, we will assign chunks of rows of the
+    // image buffer to each thread. Ideally, each one of these
+    // chunks should have the same size, though that is dependent
+    // on the number of threads in use and the image height
+    const int baseRowsPerThread = imageHeight / numThreads;
 
-            for (int sample = 0; sample < samplesPerPixel; ++sample) {
-                const Ray ray = generateRay(x, y);
-                pixelColor += computeColor(ray, scene, maxDepth);
-            }
+    std::vector<int> rowsPerThread(numThreads, baseRowsPerThread);
+    std::vector<std::thread> threads(numThreads);
 
-            const float scale = 1.0f / samplesPerPixel;
-            pixelColor *= scale;
+    int extraRows = imageHeight % numThreads;
+    size_t index = 0;
 
-            // Linear to Gamma space transform
-            pixelColor.x = linearToGamma(pixelColor.x);
-            pixelColor.y = linearToGamma(pixelColor.y);
-            pixelColor.z = linearToGamma(pixelColor.z);
+    while (extraRows > 0) {
+        ++rowsPerThread[index];
+        ++index;
+        --extraRows;
+    }
 
-            pixelColor.x = std::clamp(pixelColor.x, 0.0f, 0.999f);
-            pixelColor.y = std::clamp(pixelColor.y, 0.0f, 0.999f);
-            pixelColor.z = std::clamp(pixelColor.z, 0.0f, 0.999f);
+    int yStart = 0;
+    for (size_t i = 0; i < numThreads; ++i) {
+        threads[i] = std::thread(
+            renderChunk,
+            imageBuffer,
+            yStart,
+            rowsPerThread[i],
+            imageWidth,
+            scene,
+            this);
 
-            imageBuffer[y * imageWidth + x] = rgbToHex(pixelColor);
+        yStart += rowsPerThread[i];
+    }
+
+    // Wait for all threads to finish execution
+    for (auto& thread : threads) {
+        if (thread.joinable()) {
+            thread.join();
         }
     }
 }
@@ -60,6 +75,40 @@ void Camera::initialize() {
     const float defocusRadius = focusDistance * tanf(defocusAngle * 0.5f);
     m_DefocusDiskX = m_U * defocusRadius;
     m_DefocusDiskY = m_V * defocusRadius;
+}
+
+void Camera::renderChunk(
+    uint32_t* const imageBuffer,
+    int yStart,
+    int numRows,
+    int imageWidth,
+    const Scene& scene,
+    Camera* camera) {
+
+    for (int y = yStart; y < yStart + numRows; ++y) {
+        for (int x = 0; x < imageWidth; ++x) {
+            Vec3 pixelColor = { 0.0f, 0.0f, 0.0f };
+
+            for (int sample = 0; sample < camera->samplesPerPixel; ++sample) {
+                const Ray ray = camera->generateRay(x, y);
+                pixelColor += camera->computeColor(ray, scene, camera->maxDepth);
+            }
+
+            const float scale = 1.0f / camera->samplesPerPixel;
+            pixelColor *= scale;
+
+            // Linear to Gamma space transform
+            pixelColor.x = linearToGamma(pixelColor.x);
+            pixelColor.y = linearToGamma(pixelColor.y);
+            pixelColor.z = linearToGamma(pixelColor.z);
+
+            pixelColor.x = std::clamp(pixelColor.x, 0.0f, 0.999f);
+            pixelColor.y = std::clamp(pixelColor.y, 0.0f, 0.999f);
+            pixelColor.z = std::clamp(pixelColor.z, 0.0f, 0.999f);
+
+            imageBuffer[y * imageWidth + x] = rgbToHex(pixelColor);
+        }
+    }
 }
 
 Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
