@@ -47,7 +47,7 @@ bool DielectricMaterial::scatter(
 
     const Vec3 unitDir = normalize(rayIn.dir);
     const float cosTheta = fmin(dot(-unitDir, hitData.normal), 1.0f);
-    const float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+    const float sinTheta = sqrtf(1.0f - cosTheta * cosTheta);
 
     const bool cannotRefract = refractionRatio * sinTheta > 1.0f;
     Vec3 direction{};
