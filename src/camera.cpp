@@ -85,13 +85,16 @@ void Camera::renderChunk(
     const Scene& scene,
     Camera* camera) {
 
+    uint32_t seed = std::hash<std::thread::id>()(std::this_thread::get_id());
+    seed += 1;
+
     for (int y = yStart; y < yStart + numRows; ++y) {
         for (int x = 0; x < imageWidth; ++x) {
             Vec3 pixelColor = { 0.0f, 0.0f, 0.0f };
 
             for (int sample = 0; sample < camera->samplesPerPixel; ++sample) {
-                const Ray ray = camera->generateRay(x, y);
-                pixelColor += camera->computeColor(ray, scene, camera->maxDepth);
+                const Ray ray = camera->generateRay(x, y, &seed);
+                pixelColor += camera->computeColor(ray, scene, camera->maxDepth, &seed);
             }
 
             const float scale = 1.0f / camera->samplesPerPixel;
@@ -111,7 +114,7 @@ void Camera::renderChunk(
     }
 }
 
-Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
+Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth, uint32_t* seed) const {
     HitData hit{};
 
     if (depth <= 0) {
@@ -126,8 +129,8 @@ Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
         Ray scattered{};
         Vec3 attenuation{};
 
-        if (hit.material->scatter(ray, hit, &attenuation, &scattered)) {
-            return attenuation * computeColor(scattered, scene, depth - 1);
+        if (hit.material->scatter(ray, hit, &attenuation, &scattered, seed)) {
+            return attenuation * computeColor(scattered, scene, depth - 1, seed);
         }
 
         return { 0.0f, 0.0f, 0.0f };
@@ -138,25 +141,25 @@ Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth) const {
     return (1.0 - a)* Vec3{1.0, 1.0, 1.0} + a * Vec3{0.5, 0.7, 1.0};
 }
 
-Ray Camera::generateRay(int x, int y) const {
+Ray Camera::generateRay(int x, int y, uint32_t* seed) const {
     const Vec3 pixelCenter = m_PixelTopLeft + (x * m_PixelDeltaX) + (y * m_PixelDeltaY);
-    const Vec3 pixelSample = pixelCenter + pixelSampleSquare();
+    const Vec3 pixelSample = pixelCenter + pixelSampleSquare(seed);
 
-    const Vec3 rayOrigin = (defocusAngle > 0.0f) ? defocusDiskSample() : position;
+    const Vec3 rayOrigin = (defocusAngle > 0.0f) ? defocusDiskSample(seed) : position;
     const Vec3 rayDir = pixelSample - rayOrigin;
 
     return { rayOrigin, rayDir };
 }
 
-Vec3 Camera::pixelSampleSquare() const {
-    const float x = -0.5f + randomFloat();
-    const float y = -0.5f + randomFloat();
+Vec3 Camera::pixelSampleSquare(uint32_t* seed) const {
+    const float x = -0.5f + randomFloat(seed);
+    const float y = -0.5f + randomFloat(seed);
 
     return x * m_PixelDeltaX + y * m_PixelDeltaY;
 }
 
-Vec3 Camera::defocusDiskSample() const {
-    const Vec3 p = randomVec3InUnitDisk();
+Vec3 Camera::defocusDiskSample(uint32_t* seed) const {
+    const Vec3 p = randomVec3InUnitDisk(seed);
 
     return position + (p.x * m_DefocusDiskX) + (p.y * m_DefocusDiskY);
 }

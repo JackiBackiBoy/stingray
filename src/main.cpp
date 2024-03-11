@@ -110,11 +110,13 @@ int main(int argc, char* argv[]) {
     std::vector<Sphere> spheres{};
     spheres.reserve(100);
 
+    uint32_t seed = 123456789;
+
     for (size_t i = 0; i < 100; ++i) {
-        DiffuseMaterial material({ randomFloat(), randomFloat(), randomFloat() });
+        DiffuseMaterial material({ randomFloat(&seed), randomFloat(&seed), randomFloat(&seed) });
         sphereMaterials.push_back(material);
 
-        const Vec3 p = { randomFloat(-7.0f, 7.0f), 0.2f, randomFloat(-7.0f, 7.0f) };
+        const Vec3 p = { randomFloat(-7.0f, 7.0f, &seed), 0.2f, randomFloat(-7.0f, 7.0f, &seed) };
 
         Sphere sphere(p, 0.2f, &sphereMaterials[i]);
         spheres.push_back(sphere);

@@ -131,25 +131,41 @@ struct Ray {
 };
 
 /* Randomizers */
-inline float randomFloat() {
-    return rand() / (RAND_MAX + 1.0);
+inline uint32_t xorShift32(uint32_t *state)
+{
+    uint32_t x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
 }
 
-inline float randomFloat(float min, float max) {
-    return min + (max - min) * randomFloat();
+inline float randomFloat(uint32_t* state) {
+    //return rand() / (RAND_MAX + 1.0);
+
+    return xorShift32(state) / 4294967296.0f;
 }
 
-inline Vec3 randomVec3() {
-    return { randomFloat(), randomFloat(), randomFloat() };
+inline float randomFloat(float min, float max, uint32_t* state) {
+    return min + (max - min) * randomFloat(state);
 }
 
-inline Vec3 randomVec3(float min, float max) {
-    return { randomFloat(min, max), randomFloat(min, max), randomFloat(min, max) };
+inline Vec3 randomVec3(uint32_t* state) {
+    return { randomFloat(state), randomFloat(state), randomFloat(state) };
 }
 
-inline Vec3 randomUnitSphereVec3() {
+inline Vec3 randomVec3(float min, float max, uint32_t* state) {
+    return {
+        randomFloat(min, max, state),
+        randomFloat(min, max, state),
+        randomFloat(min, max, state)
+    };
+}
+
+inline Vec3 randomUnitSphereVec3(uint32_t* state) {
     while (true) {
-        const Vec3 u = randomVec3(-1.0f, 1.0f);
+        const Vec3 u = randomVec3(-1.0f, 1.0f, state);
 
         if (dot(u, u) < 1.0f) {
             return u;
@@ -157,12 +173,12 @@ inline Vec3 randomUnitSphereVec3() {
     }
 }
 
-inline Vec3 randomUnitVec3() {
-    return normalize(randomUnitSphereVec3());
+inline Vec3 randomUnitVec3(uint32_t* state) {
+    return normalize(randomUnitSphereVec3(state));
 }
 
-inline Vec3 randomHemisphereVec3(const Vec3& normal) {
-    Vec3 onUnitSphere = randomUnitVec3();
+inline Vec3 randomHemisphereVec3(const Vec3& normal, uint32_t* state) {
+    Vec3 onUnitSphere = randomUnitVec3(state);
 
     if (dot(onUnitSphere, normal) > 0.0f) {
         return onUnitSphere;
@@ -171,9 +187,13 @@ inline Vec3 randomHemisphereVec3(const Vec3& normal) {
     return -onUnitSphere;
 }
 
-inline Vec3 randomVec3InUnitDisk() {
+inline Vec3 randomVec3InUnitDisk(uint32_t* state) {
     while (true) {
-        const Vec3 p = { randomFloat(-1.0f, 1.0f), randomFloat(-1.0f, 1.0f), 0.0f };
+        const Vec3 p = {
+            randomFloat(-1.0f, 1.0f, state),
+            randomFloat(-1.0f, 1.0f, state),
+            0.0f
+        };
 
         if (dot(p, p) < 1.0f) {
             return p;

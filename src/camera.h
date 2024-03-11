@@ -34,10 +34,10 @@ private:
         Camera* camera
     );
 
-    Vec3 computeColor(const Ray& ray, const Scene& scene, int depth) const;
-    Ray generateRay(int x, int y) const;
-    Vec3 pixelSampleSquare() const;
-    Vec3 defocusDiskSample() const;
+    Vec3 computeColor(const Ray& ray, const Scene& scene, int depth, uint32_t* seed) const;
+    Ray generateRay(int x, int y, uint32_t* seed) const;
+    Vec3 pixelSampleSquare(uint32_t* seed) const;
+    Vec3 defocusDiskSample(uint32_t* seed) const;
 
     float m_AspectRatio = 1.0f;
     Vec3 m_PixelDeltaX{};

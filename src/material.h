@@ -12,7 +12,8 @@ public:
         const Ray& rayIn,
         const HitData& hitData,
         Vec3* const attenuation,
-        Ray* const rayScattered) const = 0;
+        Ray* const rayScattered,
+        uint32_t* seed) const = 0;
 };
 
 // Note: Also known as Lambertian material
@@ -26,7 +27,8 @@ public:
         const Ray& rayIn,
         const HitData& hitData,
         Vec3* const attenuation,
-        Ray* const rayScattered) const override;
+        Ray* const rayScattered,
+        uint32_t* seed) const override;
 };
 
 class MetalMaterial final : public Material {
@@ -37,7 +39,8 @@ public:
         const Ray& rayIn,
         const HitData& hitData,
         Vec3* const attenuation,
-        Ray* const rayScattered) const override;
+        Ray* const rayScattered,
+        uint32_t* seed) const override;
 
     Vec3 albedo{};
     float fuzz = 0.0f;
@@ -53,5 +56,6 @@ public:
         const Ray& rayIn,
         const HitData& hitData,
         Vec3* const attenuation,
-        Ray* const rayScattered) const override;
+        Ray* const rayScattered,
+        uint32_t* seed) const override;
 };

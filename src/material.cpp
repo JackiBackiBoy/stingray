@@ -7,9 +7,10 @@ bool DiffuseMaterial::scatter(
     const Ray& rayIn,
     const HitData& hitData,
     Vec3* const attenuation,
-    Ray* const rayScattered) const {
+    Ray* const rayScattered,
+    uint32_t* seed) const {
 
-    Vec3 scatterDir = hitData.normal + randomUnitVec3();
+    Vec3 scatterDir = hitData.normal + randomUnitVec3(seed);
 
     if (scatterDir.isNearZero()) {
         scatterDir = hitData.normal;
@@ -26,10 +27,11 @@ bool MetalMaterial::scatter(
     const Ray& rayIn,
     const HitData& hitData,
     Vec3* const attenuation,
-    Ray* const rayScattered) const {
+    Ray* const rayScattered,
+    uint32_t* seed) const {
 
     Vec3 reflected = reflect(normalize(rayIn.dir), hitData.normal);
-    *rayScattered = { hitData.position, reflected + fuzz * randomUnitVec3() };
+    *rayScattered = { hitData.position, reflected + fuzz * randomUnitVec3(seed) };
     *attenuation = albedo;
 
     return dot(rayScattered->dir, hitData.normal) > 0;
@@ -40,7 +42,8 @@ bool DielectricMaterial::scatter(
     const Ray& rayIn,
     const HitData& hitData,
     Vec3* const attenuation,
-    Ray* const rayScattered) const {
+    Ray* const rayScattered,
+    uint32_t* seed) const {
 
     *attenuation = { 1.0f, 1.0f, 1.0f };
     const float refractionRatio = hitData.frontFace ? (1.0f / refractionIndex) : refractionIndex;
@@ -52,7 +55,7 @@ bool DielectricMaterial::scatter(
     const bool cannotRefract = refractionRatio * sinTheta > 1.0f;
     Vec3 direction{};
 
-    if (cannotRefract || schlickReflectance(cosTheta, refractionRatio) > randomFloat()) {
+    if (cannotRefract || schlickReflectance(cosTheta, refractionRatio) > randomFloat(seed)) {
         direction = reflect(unitDir, hitData.normal);
     }
     else {
