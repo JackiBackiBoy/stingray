@@ -3,6 +3,8 @@
 #include "scene.h"
 #include "math/sray_math.h"
 
+#include <atomic>
+
 class Camera {
 public:
     Camera(int width, int height);
@@ -25,14 +27,14 @@ public:
 
 private:
     void initialize();
-    static void renderChunk(
+    void renderChunk(
         uint32_t* const imageBuffer,
-        int yStart,
-        int numRows,
         int imageWidth,
-        const Scene& scene,
-        Camera* camera
+        int imageHeight,
+        const Scene& scene
     );
+
+    std::atomic<int> m_NextRow{ 0 };
 
     Vec3 computeColor(const Ray& ray, const Scene& scene, int depth, uint32_t* seed) const;
     Ray generateRay(int x, int y, uint32_t* seed) const;

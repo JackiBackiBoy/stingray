@@ -1,4 +1,7 @@
 @echo off
 
-clang++ -std=c++17 -O3 src/main.cpp src/camera.cpp src/material.cpp src/scene.cpp src/sphere.cpp -o cli
-cli.exe
+if not exist build mkdir build
+cd build
+cmake -S ../ -B . -G "MinGW Makefiles"
+mingw32-make
+cd ..

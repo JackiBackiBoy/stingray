@@ -70,6 +70,8 @@ void parseArgsToSettings(int argc, char* argv[], Settings& settings) {
 
 int main(int argc, char* argv[]) {
     Settings settings{};
+    settings.numThreads = std::thread::hardware_concurrency();
+
     parseArgsToSettings(argc, argv, settings);
 
     std::cout << "Max number of threads: " << std::thread::hardware_concurrency() << '\n';

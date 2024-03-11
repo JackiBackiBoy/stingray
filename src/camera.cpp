@@ -14,36 +14,17 @@ Camera::Camera(int width, int height) :
 void Camera::render(const Scene& scene, uint32_t* const imageBuffer) {
     initialize();
 
-    // Note: Given N threads, we will assign chunks of rows of the
-    // image buffer to each thread. Ideally, each one of these
-    // chunks should have the same size, though that is dependent
-    // on the number of threads in use and the image height
-    const int baseRowsPerThread = imageHeight / numThreads;
-
-    std::vector<int> rowsPerThread(numThreads, baseRowsPerThread);
     std::vector<std::thread> threads(numThreads);
 
-    int extraRows = imageHeight % numThreads;
-    size_t index = 0;
-
-    while (extraRows > 0) {
-        ++rowsPerThread[index];
-        ++index;
-        --extraRows;
-    }
-
-    int yStart = 0;
     for (size_t i = 0; i < numThreads; ++i) {
         threads[i] = std::thread(
-            renderChunk,
+            &Camera::renderChunk,
+            this,
             imageBuffer,
-            yStart,
-            rowsPerThread[i],
             imageWidth,
-            scene,
-            this);
-
-        yStart += rowsPerThread[i];
+            imageHeight,
+            scene
+        );
     }
 
     // Wait for all threads to finish execution
@@ -79,25 +60,30 @@ void Camera::initialize() {
 
 void Camera::renderChunk(
     uint32_t* const imageBuffer,
-    int yStart,
-    int numRows,
     int imageWidth,
-    const Scene& scene,
-    Camera* camera) {
+    int imageHeight,
+    const Scene& scene) {
 
     uint32_t seed = std::hash<std::thread::id>()(std::this_thread::get_id());
     seed += 1;
 
-    for (int y = yStart; y < yStart + numRows; ++y) {
+    while (true) {
+        // Determine which row the thread should process next
+        int row = m_NextRow.fetch_add(1);
+
+        if (row >= imageHeight) {
+            break;
+        }
+
         for (int x = 0; x < imageWidth; ++x) {
             Vec3 pixelColor = { 0.0f, 0.0f, 0.0f };
 
-            for (int sample = 0; sample < camera->samplesPerPixel; ++sample) {
-                const Ray ray = camera->generateRay(x, y, &seed);
-                pixelColor += camera->computeColor(ray, scene, camera->maxDepth, &seed);
+            for (int sample = 0; sample < samplesPerPixel; ++sample) {
+                const Ray ray = generateRay(x, row, &seed);
+                pixelColor += computeColor(ray, scene, maxDepth, &seed);
             }
 
-            const float scale = 1.0f / camera->samplesPerPixel;
+            const float scale = 1.0f / samplesPerPixel;
             pixelColor *= scale;
 
             // Linear to Gamma space transform
@@ -109,7 +95,7 @@ void Camera::renderChunk(
             pixelColor.y = std::clamp(pixelColor.y, 0.0f, 0.999f);
             pixelColor.z = std::clamp(pixelColor.z, 0.0f, 0.999f);
 
-            imageBuffer[y * imageWidth + x] = rgbToHex(pixelColor);
+            imageBuffer[row * imageWidth + x] = rgbToHex(pixelColor);
         }
     }
 }
