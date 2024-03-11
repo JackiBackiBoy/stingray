@@ -7,6 +7,7 @@
 /* Constants */
 constexpr float Pi = 3.141592653589793238462643383279502884e+00F;
 constexpr float PiOver180 = Pi / 180.0f;
+constexpr float epsilon = 0.000001f;
 
 /* Vectors */
 struct Vec2 {
@@ -40,7 +41,6 @@ struct Vec3 {
     inline float length() const { return sqrtf(x*x + y*y + z*z); }
 
     inline bool isNearZero() const {
-        float epsilon = 0.000001f;
         return (x < epsilon) && (y < epsilon) && (z < epsilon);
     }
 };
@@ -142,8 +142,6 @@ inline uint32_t xorShift32(uint32_t *state)
 }
 
 inline float randomFloat(uint32_t* state) {
-    //return rand() / (RAND_MAX + 1.0);
-
     return xorShift32(state) / 4294967296.0f;
 }
 

@@ -64,12 +64,11 @@ void Camera::renderChunk(
     int imageHeight,
     const Scene& scene) {
 
-    uint32_t seed = std::hash<std::thread::id>()(std::this_thread::get_id());
-    seed += 1;
+    uint32_t seed = std::hash<std::thread::id>()(std::this_thread::get_id()) + 1;
 
     while (true) {
         // Determine which row the thread should process next
-        int row = m_NextRow.fetch_add(1);
+        const int row = m_NextRow.fetch_add(1);
 
         if (row >= imageHeight) {
             break;
@@ -123,8 +122,8 @@ Vec3 Camera::computeColor(const Ray& ray, const Scene& scene, int depth, uint32_
     }
 
     const Vec3 unit_direction = normalize(ray.dir);
-    const float a = 0.5 * (unit_direction.y + 1.0);
-    return (1.0 - a)* Vec3{1.0, 1.0, 1.0} + a * Vec3{0.5, 0.7, 1.0};
+    const float a = 0.5f * (unit_direction.y + 1.0f);
+    return (1.0f - a)* Vec3{ 1.0f, 1.0f, 1.0f } + a * Vec3{ 0.5f, 0.7f, 1.0f };
 }
 
 Ray Camera::generateRay(int x, int y, uint32_t* seed) const {

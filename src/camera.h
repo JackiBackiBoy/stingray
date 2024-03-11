@@ -34,13 +34,12 @@ private:
         const Scene& scene
     );
 
-    std::atomic<int> m_NextRow{ 0 };
-
     Vec3 computeColor(const Ray& ray, const Scene& scene, int depth, uint32_t* seed) const;
     Ray generateRay(int x, int y, uint32_t* seed) const;
     Vec3 pixelSampleSquare(uint32_t* seed) const;
     Vec3 defocusDiskSample(uint32_t* seed) const;
 
+    std::atomic<int> m_NextRow{ 0 };
     float m_AspectRatio = 1.0f;
     Vec3 m_PixelDeltaX{};
     Vec3 m_PixelDeltaY{};

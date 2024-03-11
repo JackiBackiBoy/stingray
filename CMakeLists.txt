@@ -8,7 +8,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+# Compiler-specific options
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /fp:fast")
+else()
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math")
+endif()
 
 set(SOURCE_FILES
     src/camera.cpp
