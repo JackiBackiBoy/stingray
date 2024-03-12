@@ -13,6 +13,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /fp:fast")
 else()
+    set(CMAKE_BUILD_TYPE Release)
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math")
 endif()
 
