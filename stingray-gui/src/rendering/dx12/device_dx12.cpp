@@ -19,6 +19,35 @@ namespace sr {
 	ComPtr<IDxcUtils> utils{};
 	ComPtr<IDxcIncludeHandler> includeHandler{};
 
+	class CustomIncludeHandler : public IDxcIncludeHandler {
+	public:
+		HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override {
+			ComPtr<IDxcBlobEncoding> pEncoding;
+			std::wstring path = pFilename;
+
+			if (IncludedFiles.find(path) != IncludedFiles.end()) {
+				// Return empty string blob if this file has been included before
+				static const char nullStr[] = " ";
+				utils->CreateBlobFromPinned(nullStr, ARRAYSIZE(nullStr), DXC_CP_ACP, pEncoding.GetAddressOf());
+				*ppIncludeSource = pEncoding.Detach();
+				return S_OK;
+			}
+
+			HRESULT hr = utils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
+			if (SUCCEEDED(hr)) {
+				IncludedFiles.insert(path);
+				*ppIncludeSource = pEncoding.Detach();
+			}
+			return hr;
+		}
+
+		HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override { return E_NOINTERFACE; }
+		ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
+		ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
+
+		std::unordered_set<std::wstring> IncludedFiles;
+	};
+
 	inline void ThrowIfFailed(HRESULT hr) {
 		if (FAILED(hr)) {
 			// Set a breakpoint on this line to catch DirectX API errors
@@ -34,7 +63,6 @@ namespace sr {
 		createCommandAllocators();
 		createCommandQueues();
 		createDescriptorHeaps();
-		//createRTGlobalRootSignature();
 
 		m_CopyAllocator.init(this);
 	}
@@ -221,6 +249,7 @@ namespace sr {
 
 		buffer.internalState = internalState;
 		buffer.info = info;
+		buffer.type = Resource::Type::BUFFER;
 
 		D3D12_HEAP_PROPERTIES heapProperties = {};
 		heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -350,13 +379,7 @@ namespace sr {
 				}
 			};
 
-			m_Device->CreateShaderResourceView(
-				internalState->resource.Get(),
-				&srvDesc,
-				m_ResourceDescriptorHeap.getCurrentDescriptorHandle()
-			);
-
-			m_ResourceDescriptorHeap.offsetCurrentDescriptorHandle(1);
+			internalState->srvDescriptor.init(this, srvDesc, internalState->resource.Get());
 		}
 
 		// Create SRV for raw buffer (aka Byte Address Buffer)
@@ -372,13 +395,7 @@ namespace sr {
 				}
 			};
 
-			m_Device->CreateShaderResourceView(
-				internalState->resource.Get(),
-				&srvDesc,
-				m_ResourceDescriptorHeap.getCurrentDescriptorHandle()
-			);
-
-			m_ResourceDescriptorHeap.offsetCurrentDescriptorHandle(1);
+			internalState->srvDescriptor.init(this, srvDesc, internalState->resource.Get());
 		}
 	}
 
@@ -707,6 +724,10 @@ namespace sr {
 		WCHAR absolutePath[MAX_PATH] = { 0 };
 		GetFullPathName(path.c_str(), MAX_PATH, absolutePath, nullptr);
 
+		const std::wstring directory = std::wstring(path.begin(), path.begin() + path.find_last_of(L'/') + 1);
+		WCHAR absoluteDirectory[MAX_PATH] = { 0 };
+		GetFullPathName(directory.c_str(), MAX_PATH, absoluteDirectory, nullptr);
+
 		if (!utils) {
 			HMODULE dxc = LoadLibrary(L"dxcompiler.dll");
 
@@ -720,13 +741,13 @@ namespace sr {
 		const std::wstring targetProfile = [=]() {
 			switch (stage) {
 			case ShaderStage::VERTEX:
-				return L"vs_6_5";
+				return L"vs_6_6";
 			case ShaderStage::PIXEL:
-				return L"ps_6_5";
+				return L"ps_6_6";
 			case ShaderStage::COMPUTE:
-				return L"cs_6_5";
+				return L"cs_6_6";
 			case ShaderStage::LIBRARY:
-				return L"lib_6_5";
+				return L"lib_6_6";
 			default:
 				return L"";
 			}
@@ -736,6 +757,8 @@ namespace sr {
 		std::vector<LPCWSTR> compilationArguments = {
 			L"-HV",
 			L"2021",
+			L"-I",
+			absoluteDirectory,
 			L"-E",
 			L"main",
 			L"-T",
@@ -1431,11 +1454,35 @@ namespace sr {
 			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 
+		const D3D12_ROOT_PARAMETER1 geometryInfoParam = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+			.Descriptor = {
+				.ShaderRegister = 1,
+				.RegisterSpace = 0,
+				.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE
+			},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		};
+
+		const D3D12_ROOT_PARAMETER1 materialInfoParam = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+			.Descriptor = {
+				.ShaderRegister = 2,
+				.RegisterSpace = 0,
+				.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE
+			},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		};
+
 		rootParameters.push_back(accelerationStructureRootParam);
 		rootParameters.push_back(uavTable);
+		rootParameters.push_back(geometryInfoParam);
+		rootParameters.push_back(materialInfoParam);
 
 		internalState->rootParameterIndexLUT.insert({ "Scene", 0 });
 		internalState->rootParameterIndexLUT.insert({ "RenderTarget", 1 });
+		internalState->rootParameterIndexLUT.insert({ "g_GeometryInfo", 2 });
+		internalState->rootParameterIndexLUT.insert({ "g_MaterialInfo", 3 });
 
 		// Retrieve root parameters
 		for (uint32_t i = 0; i < internalShader->rootParameters.size(); ++i) {
@@ -1458,7 +1505,7 @@ namespace sr {
 		}
 
 		// TODO: We likely want to make this dynamic
-		const UINT payloadSize = 4 * sizeof(float); // float rayHitT
+		const UINT payloadSize = 4 * sizeof(float) + 2 * sizeof(uint32_t); // This seems wrong
 		const UINT attributeSize = 2 * sizeof(float); // float2 barycentrics (NOTE: Built-in attribute from BuiltInTriangleIntersectionAttributes in the spec)
 
 		auto shaderConfig = stateObjectDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();
@@ -1497,7 +1544,7 @@ namespace sr {
 		globalRootSignature->SetRootSignature(internalState->rootSignature.Get());
 
 		auto pipelineConfig = stateObjectDesc.CreateSubobject<CD3DX12_RAYTRACING_PIPELINE_CONFIG_SUBOBJECT>();
-		const UINT maxRecursionDepth = 1; // TODO: Move to info-struct instead
+		const UINT maxRecursionDepth = 3; // TODO: Move to info-struct instead
 		pipelineConfig->Config(maxRecursionDepth);
 
 		// Build the pipeline state object
@@ -1536,6 +1583,24 @@ namespace sr {
 		}
 
 		internalCommandList->getGraphicsCommandList()->SetComputeRootConstantBufferView(
+			nameSearch->second,
+			internalBuffer->gpuAddress
+		);
+	}
+
+	void GraphicsDevice_DX12::bindRayTracingStructuredBuffer(const Buffer& buffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) {
+		auto internalBuffer = (Buffer_DX12*)buffer.internalState.get();
+		auto internalPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
+		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+
+		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
+
+		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
+			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
+			return;
+		}
+
+		internalCommandList->getGraphicsCommandList()->SetComputeRootShaderResourceView(
 			nameSearch->second,
 			internalBuffer->gpuAddress
 		);
@@ -2157,7 +2222,7 @@ namespace sr {
 		}
 	}
 
-	int GraphicsDevice_DX12::getDescriptorIndex(const Resource& resource) const {
+	uint32_t GraphicsDevice_DX12::getDescriptorIndex(const Resource& resource) const {
 		if (resource.type == Resource::Type::TEXTURE) {
 			auto internalTexture = (Texture_DX12*)resource.internalState.get();
 
@@ -2168,8 +2233,11 @@ namespace sr {
 				return internalTexture->uavDescriptor.index;
 			}	
 		}
+		else if (resource.type == Resource::Type::BUFFER) {
+			auto internalBuffer = (Buffer_DX12*)resource.internalState.get();
 
-		// TODO: Handle the case of buffers
+			return internalBuffer->srvDescriptor.index;
+		}
 
 		return 0;
 	}

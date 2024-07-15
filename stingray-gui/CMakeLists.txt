@@ -35,6 +35,7 @@ set(SOURCE_FILES
     # Core
     ${SOURCE_DIR}/core/application.cpp
     ${SOURCE_DIR}/core/application.hpp
+    ${SOURCE_DIR}/core/enum_flags.hpp
     ${SOURCE_DIR}/core/utilities.cpp
     ${SOURCE_DIR}/core/utilities.hpp
     ${SOURCE_DIR}/core/window.hpp

@@ -187,11 +187,11 @@ namespace sr {
 							positions[k * 3 + 0]
 						};
 
-						//vertex.normal = {
-						//	normals[k * 3 + 2],
-						//	normals[k * 3 + 1],
-						//	normals[k * 3 + 0]
-						//};
+						vertex.normal = {
+							normals[k * 3 + 2],
+							normals[k * 3 + 1],
+							normals[k * 3 + 0]
+						};
 
 						//vertex.tangent = {
 						//	tangents[k * 4 + 0],
@@ -232,14 +232,16 @@ namespace sr {
 				.size = asset->model.vertices.size() * sizeof(ModelVertex),
 				.stride = sizeof(ModelVertex),
 				.usage = Usage::DEFAULT,
-				.bindFlags = BindFlag::VERTEX_BUFFER
+				.bindFlags = BindFlag::VERTEX_BUFFER | BindFlag::SHADER_RESOURCE, // TODO: This is hardcoded here for Ray-Tracing shader, should probably be altered
+				.miscFlags = MiscFlag::BUFFER_STRUCTURED
 			};
 
 			const BufferInfo indexBufferInfo = {
 				.size = asset->model.indices.size() * sizeof(uint32_t),
 				.stride = sizeof(uint32_t),
 				.usage = Usage::DEFAULT,
-				.bindFlags = BindFlag::INDEX_BUFFER
+				.bindFlags = BindFlag::INDEX_BUFFER | BindFlag::SHADER_RESOURCE, // TODO: This is hardcoded here for Ray-Tracing shader, should probably be altered
+				.miscFlags = MiscFlag::BUFFER_STRUCTURED
 			};
 
 			device.createBuffer(vertexBufferInfo, asset->model.vertexBuffer, asset->model.vertices.data());

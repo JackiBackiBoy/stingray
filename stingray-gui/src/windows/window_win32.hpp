@@ -8,7 +8,7 @@
 namespace sr {
 	class WindowWin32 final : public IWindow {
 	public:
-		WindowWin32(const std::string& title, int width, int height);
+		WindowWin32(const WindowInfo& info);
 		virtual ~WindowWin32();
 
 		bool pollEvents() override;

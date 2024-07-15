@@ -34,6 +34,7 @@ namespace sr {
 		void createRayTracingPipeline(const RayTracingPipelineInfo& info, RayTracingPipeline& rtPipeline) override;
 		void bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& commandList) override;
 		void bindRayTracingConstantBuffer(const Buffer& uniformBuffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
+		void bindRayTracingStructuredBuffer(const Buffer& buffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
 		void bindRayTracingAS(const RayTracingAS& accelerationStructure, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
 		void createRayTracingInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) override;
 		void dispatchRays(const DispatchRaysInfo& info, const CommandList& commandList) override;
@@ -64,7 +65,7 @@ namespace sr {
 		void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& commandList) override;
 		void drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& commandList) override;
 
-		int getDescriptorIndex(const Resource& resource) const override;
+		uint32_t getDescriptorIndex(const Resource& resource) const override;
 
 		void waitForGPU() const override;
 
@@ -101,7 +102,7 @@ namespace sr {
 
 		struct Descriptor {
 			D3D12_CPU_DESCRIPTOR_HANDLE handle = {};
-			int index = 0;
+			uint32_t index = 0;
 
 			void init(GraphicsDevice_DX12* device, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, ID3D12Resource* res);
 			void init(GraphicsDevice_DX12* device, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, ID3D12Resource* res);
@@ -135,6 +136,8 @@ namespace sr {
 
 		struct Buffer_DX12 : public Resource_DX12 {
 			BufferInfo info = {};
+
+			Descriptor srvDescriptor = {};
 		};
 
 		struct RayTracingAS_DX12 : public Resource_DX12 {

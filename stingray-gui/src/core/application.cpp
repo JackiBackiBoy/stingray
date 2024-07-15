@@ -15,7 +15,14 @@ namespace sr {
 		m_Width = 1280;
 		m_Height = 720;
 
-		m_Window = std::make_unique<Window>(title, m_Width, m_Height);
+		const WindowInfo windowInfo = {
+			.title = title,
+			.width = m_Width,
+			.height = m_Height,
+			.flags = WindowFlag::HCENTER | WindowFlag::VCENTER | WindowFlag::SIZE_IS_CLIENT_AREA
+		};
+
+		m_Window = std::make_unique<Window>(windowInfo);
 		
 	#if defined(SR_WINDOWS)
 		m_Device = std::make_unique<GraphicsDevice_DX12>(m_Width, m_Height, (HWND)m_Window->getHandle());
@@ -54,6 +61,12 @@ namespace sr {
 		m_Device->waitForGPU();
 	}
 
+	Entity* Application::addEntity(const std::string& name) {
+		m_Entities.push_back(std::make_unique<Entity>());
+
+		return m_Entities.back().get();
+	}
+
 	void Application::initialize() {
 		sr::rawinput::initialize();
 
@@ -69,6 +82,51 @@ namespace sr {
 
 		// TODO: Only works on windows, we'll fix this later
 		m_Device->createSwapChain(swapChainInfo, m_SwapChain, (HWND)m_Window->getHandle());
+	}
+
+	void Application::createEntities() {
+		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/SheenCloth.gltf", *m_Device);
+		m_PlaneModel = sr::assetmanager::loadFromFile("assets/models/plane.gltf", *m_Device);
+
+		// Cornell box
+		const float cornellScale = 4.0f;
+
+		auto cornellFloor = addEntity("Floor");
+		cornellFloor->scale = glm::vec3(cornellScale);
+		cornellFloor->model = &m_PlaneModel.getModel();
+
+		auto cornellTop = addEntity("Top");
+		cornellTop->position.y = 2 * cornellScale;
+		cornellTop->scale = glm::vec3(cornellScale);
+		cornellTop->model = &m_PlaneModel.getModel();
+
+		auto cornellWallLeft = addEntity("WallLeft");
+		cornellWallLeft->position.x = -cornellScale;
+		cornellWallLeft->position.y = cornellScale;
+		cornellWallLeft->scale = glm::vec3(cornellScale);
+		cornellWallLeft->model = &m_PlaneModel.getModel();
+		cornellWallLeft->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
+		cornellWallLeft->color = { 1.0f, 0.0f, 0.0f, 1.0f };
+
+		auto cornellWallRight = addEntity("WallRight");
+		cornellWallRight->position.x = cornellScale;
+		cornellWallRight->position.y = cornellScale;
+		cornellWallRight->scale = glm::vec3(cornellScale);
+		cornellWallRight->model = &m_PlaneModel.getModel();
+		cornellWallRight->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
+		cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
+
+		auto cornellWallBack = addEntity("WallBack");
+		cornellWallBack->position.y = cornellScale;
+		cornellWallBack->position.z = cornellScale;
+		cornellWallBack->scale = glm::vec3(cornellScale);
+		cornellWallBack->model = &m_PlaneModel.getModel();
+		cornellWallBack->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(-90.0f));
+
+		m_SphereEntity = addEntity("Sphere");
+		m_SphereEntity->position.y = 0;
+		m_SphereEntity->scale = glm::vec3(50.0f);
+		m_SphereEntity->model = &m_CubeModel.getModel();
 	}
 
 	void Application::createRTObjects() {
@@ -127,53 +185,78 @@ namespace sr {
 		for (size_t f = 0; f < GraphicsDevice::NUM_BUFFERS; ++f) {
 			m_Device->createBuffer(perFrameUBOInfo, m_PerFrameUBOs[f], &m_PerFrameUBOData);
 		}
+
+		// Create geometry info buffer
+		const BufferInfo geometryInfoBufferInfo = {
+			.size = sizeof(GeometryInfo) * m_RayTracingBLASes.size(),
+			.stride = sizeof(GeometryInfo),
+			.usage = Usage::UPLOAD,
+			.bindFlags = BindFlag::SHADER_RESOURCE,
+			.miscFlags = MiscFlag::BUFFER_STRUCTURED,
+			.persistentMap = true
+		};
+
+		// This is really ugly
+		m_GeometryInfoData.reserve(m_RayTracingBLASes.size());
+
+		for (auto& blas : m_RayTracingBLASes) {
+			const GeometryInfo geometryInfo = {
+				.vertexBufferIndex = m_Device->getDescriptorIndex(*blas->info.blas.geometries[0].triangles.vertexBuffer),
+				.indexBufferIndex = m_Device->getDescriptorIndex(*blas->info.blas.geometries[0].triangles.indexBuffer)
+			};
+
+			m_GeometryInfoData.push_back(geometryInfo);
+		}
+
+		m_Device->createBuffer(geometryInfoBufferInfo, m_GeometryInfoBuffer, m_GeometryInfoData.data());
+
+		// Create material info buffer
+		const BufferInfo materialInfoBufferInfo{
+			.size = sizeof(MaterialInfo) * m_Entities.size(),
+			.stride = sizeof(MaterialInfo),
+			.usage = Usage::UPLOAD,
+			.bindFlags = BindFlag::SHADER_RESOURCE,
+			.miscFlags = MiscFlag::BUFFER_STRUCTURED,
+			.persistentMap = true
+		};
+
+		m_MaterialInfoData.reserve(m_Entities.size());
+		for (auto& entity : m_Entities) {
+			const MaterialInfo materialInfo = {
+				.color = entity->color,
+				.roughness = entity->roughness
+			};
+
+			m_MaterialInfoData.push_back(materialInfo);
+		}
+
+		m_Device->createBuffer(materialInfoBufferInfo, m_MaterialInfoBuffer, m_MaterialInfoData.data());
 	}
 
 	void Application::createBLASes() {
-		// Cube BLAS
-		m_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
+		for (auto& entity : m_Entities) {
+			// TODO: Add loop for sub-meshes per model
+			m_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
+			RayTracingAS& blas = *m_RayTracingBLASes.back();
+			const Model* model = entity->model;
 
-		RayTracingAS& cubeBLAS = *m_RayTracingBLASes.back();
-		Model& cubeModel = m_CubeModel.getModel();
+			blas.info.type = RayTracingASType::BLAS;
+			blas.info.blas.geometries.resize(model->meshes.size());
 
-		cubeBLAS.info.type = RayTracingASType::BLAS;
-		cubeBLAS.info.blas.geometries.resize(cubeModel.meshes.size());
+			for (auto& geometry : blas.info.blas.geometries) {
+				geometry.type = RayTracingBLASGeometry::Type::TRIANGLES;
 
-		for (auto& geometry : cubeBLAS.info.blas.geometries) {
-			geometry.type = RayTracingBLASGeometry::Type::TRIANGLES;
+				auto& triangles = geometry.triangles;
+				triangles.vertexBuffer = &model->vertexBuffer;
+				triangles.indexBuffer = &model->indexBuffer;
+				triangles.vertexFormat = Format::R32G32B32_FLOAT;
+				triangles.vertexCount = static_cast<uint32_t>(model->vertices.size());
+				triangles.vertexStride = sizeof(ModelVertex);
+				triangles.indexCount = static_cast<uint32_t>(model->indices.size());
+			}
 
-			auto& triangles = geometry.triangles;
-			triangles.vertexBuffer = &cubeModel.vertexBuffer;
-			triangles.indexBuffer = &cubeModel.indexBuffer;
-			triangles.vertexFormat = Format::R32G32B32_FLOAT;
-			triangles.vertexCount = static_cast<uint32_t>(cubeModel.vertices.size());
-			triangles.vertexStride = sizeof(ModelVertex);
-			triangles.indexCount = static_cast<uint32_t>(cubeModel.indices.size());
+			m_Device->createRayTracingAS(blas.info, blas);
 		}
-
-		// Plane BLAS
-		m_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
-
-		RayTracingAS& planeBLAS = *m_RayTracingBLASes.back();
-		Model& planeModel = m_PlaneModel.getModel();
-
-		planeBLAS.info.type = RayTracingASType::BLAS;
-		planeBLAS.info.blas.geometries.resize(planeModel.meshes.size());
-
-		for (auto& geometry : planeBLAS.info.blas.geometries) {
-			geometry.type = RayTracingBLASGeometry::Type::TRIANGLES;
-
-			auto& triangles = geometry.triangles;
-			triangles.vertexBuffer = &planeModel.vertexBuffer;
-			triangles.indexBuffer = &planeModel.indexBuffer;
-			triangles.vertexFormat = Format::R32G32B32_FLOAT;
-			triangles.vertexCount = static_cast<uint32_t>(planeModel.vertices.size());
-			triangles.vertexStride = sizeof(ModelVertex);
-			triangles.indexCount = static_cast<uint32_t>(planeModel.indices.size());
-		}
-
-		m_Device->createRayTracingAS(cubeBLAS.info, cubeBLAS);
-		m_Device->createRayTracingAS(planeBLAS.info, planeBLAS);
 	}
 
 	void Application::createTLAS() {
@@ -197,17 +280,18 @@ namespace sr {
 				.blasResource = m_RayTracingBLASes[i].get()
 			};
 
+			// Update the transform data
+			Entity* entity = m_Entities[i].get();
+			glm::mat4 scale = glm::scale(glm::mat4(1.0f), entity->scale);
+			glm::mat4 rotation = quatToMat4(entity->orientation);
+			glm::mat4 translation = glm::translate(glm::mat4(1.0f), entity->position);
+			glm::mat4 transformation = glm::transpose(translation * rotation * scale); // convert to row-major representation
+
+			std::memcpy(instance.transform, &transformation[0][0], sizeof(instance.transform));
+
 			void* dataSection = (uint8_t*)m_InstanceBuffer.mappedData + i * m_InstanceBuffer.info.stride;
 			m_Device->writeTLASInstance(instance, dataSection);
 		}
-	}
-
-	void Application::createEntities() {
-		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/cube.gltf", *m_Device);
-		m_PlaneModel = sr::assetmanager::loadFromFile("assets/models/sphere.gltf", *m_Device);
-
-		m_CubeEntity.position.z = 5.0f;
-		m_CubeEntity.model = &m_CubeModel.getModel();
 	}
 
 	void Application::updateRT(float dt) {
@@ -288,6 +372,8 @@ namespace sr {
 		m_Device->bindRayTracingPipeline(m_RayTracingPipeline, m_RayTracingOutput, commandList);
 		m_Device->bindRayTracingAS(m_RayTracingTLAS, "Scene", m_RayTracingPipeline, commandList);
 		m_Device->bindRayTracingConstantBuffer(m_PerFrameUBOs[m_Device->getBufferIndex()], "g_PerFrameData", m_RayTracingPipeline, commandList);
+		m_Device->bindRayTracingStructuredBuffer(m_GeometryInfoBuffer, "g_GeometryInfo", m_RayTracingPipeline, commandList);
+		m_Device->bindRayTracingStructuredBuffer(m_MaterialInfoBuffer, "g_MaterialInfo", m_RayTracingPipeline, commandList);
 
 		const DispatchRaysInfo dispatchRaysInfo = {
 			.rayGenTable = &m_RayGenShaderTable,

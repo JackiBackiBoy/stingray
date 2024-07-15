@@ -29,6 +29,7 @@ namespace sr {
 		virtual void createRayTracingPipeline(const RayTracingPipelineInfo& info, RayTracingPipeline& rtPipeline) = 0;
 		virtual void bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& commandList) = 0;
 		virtual void bindRayTracingConstantBuffer(const Buffer& uniformBuffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) = 0;
+		virtual void bindRayTracingStructuredBuffer(const Buffer& buffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) = 0;
 		virtual void bindRayTracingAS(const RayTracingAS& accelerationStructure, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) = 0;
 		virtual void createRayTracingInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) = 0;
 		virtual void dispatchRays(const DispatchRaysInfo& info, const CommandList& commandList) = 0;
@@ -59,7 +60,7 @@ namespace sr {
 		virtual void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& commandList) = 0;
 		virtual void drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& commandList) = 0;
 
-		virtual int getDescriptorIndex(const Resource& resource) const = 0; // TODO: Perhaps support subresources (we're not there yet though ;))
+		virtual uint32_t getDescriptorIndex(const Resource& resource) const = 0; // TODO: Perhaps support subresources (we're not there yet though ;))
 		virtual void waitForGPU() const = 0;
 
 		static constexpr size_t NUM_BUFFERS = 3; // Triple buffering by default

@@ -21,6 +21,8 @@ namespace sr {
 		virtual ~Application();
 
 		void run();
+		Entity* addEntity(const std::string& name);
+
 		virtual void onInitialize() = 0;
 		virtual void onUpdate() = 0;
 
@@ -31,12 +33,30 @@ namespace sr {
 			quat orientation = {};
 		};
 
+		struct alignas(256) PerFrameUBO {
+			glm::mat4 invViewProjection = {};
+			glm::vec3 cameraPosition = { 0.0f, 0.0f, 0.0f };
+			float pad1 = 0.0f;
+		};
+
+		// TODO: Likely needs a name change
+		struct GeometryInfo { // NOTE: Per BLAS
+			uint32_t vertexBufferIndex = 0;
+			uint32_t indexBufferIndex = 0;
+		};
+
+		struct MaterialInfo {
+			glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+			float roughness = 1.0f;
+		};
+
 		void initialize();
+		void createEntities();
 		void createRTObjects();
 		void createBLASes();
 		void createTLAS();
 		void writeTLASInstances();
-		void createEntities();
+		
 
 		void updateRT(float dt);
 		void renderRT(float dt);
@@ -57,14 +77,12 @@ namespace sr {
 		Buffer m_HitShaderTable = {};
 		Buffer m_InstanceBuffer = {};
 
-		struct alignas(256) PerFrameUBO {
-			glm::mat4 invViewProjection = {};
-			glm::vec3 cameraPosition = { 0.0f, 0.0f, 0.0f };
-			float pad1 = 0.0f;
-		};
-
 		Buffer m_PerFrameUBOs[GraphicsDevice::NUM_BUFFERS] = {};
 		PerFrameUBO m_PerFrameUBOData = {};
+		Buffer m_GeometryInfoBuffer = {};
+		std::vector<GeometryInfo> m_GeometryInfoData = {};
+		Buffer m_MaterialInfoBuffer = {};
+		std::vector<MaterialInfo> m_MaterialInfoData = {};
 
 		std::vector<std::unique_ptr<RayTracingAS>> m_RayTracingBLASes = {};
 		RayTracingAS m_RayTracingTLAS = {};
@@ -75,7 +93,9 @@ namespace sr {
 		Asset m_CubeModel = {};
 		Asset m_PlaneModel = {};
 
-		Entity m_CubeEntity = {};
-		Entity m_PlaneEntity = {};
+		// TODO: Move this to a scene class or something
+		std::vector<std::unique_ptr<Entity>> m_Entities = {};
+		Entity* m_SphereEntity = nullptr;
+		Entity* m_MirrorEntity = nullptr;
 	};
 }
