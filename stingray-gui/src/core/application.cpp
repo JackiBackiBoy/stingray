@@ -6,8 +6,8 @@
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 
 #if defined(SR_WINDOWS)
-#include "../rendering/dx12/device_dx12.hpp"
-#include "../input/rawinput.hpp"
+	#include "../rendering/dx12/device_dx12.hpp"
+	#include "../input/rawinput.hpp"
 #endif
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -211,13 +211,12 @@ namespace sr {
 			m_Camera.position.y -= cameraMoveSpeed * dt;
 		}
 
-		m_Camera.viewMatrix = glm::lookAt(m_Camera.position, m_Camera.position + qForward, qUp);
-
 		// Update per-frame data
+		m_Camera.viewMatrix = glm::lookAt(m_Camera.position, m_Camera.position + qForward, qUp);
 		m_PerFrameUBOData.cameraPosition = m_Camera.position;
 
 		float aspectRatio = (float)m_Width / m_Height;
-		glm::mat4 proj = glm::perspective(glm::radians(45.0f), aspectRatio, 0.1f, 125.0f);
+		glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
 
 		m_PerFrameUBOData.invViewProjection = glm::inverse(proj * m_Camera.viewMatrix);
 		std::memcpy(m_PerFrameUBOs[m_Device->getBufferIndex()].mappedData, &m_PerFrameUBOData, sizeof(m_PerFrameUBOData));
