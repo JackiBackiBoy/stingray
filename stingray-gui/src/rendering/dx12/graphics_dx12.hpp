@@ -414,16 +414,19 @@ namespace sr {
 	constexpr D3D12_RESOURCE_STATES convertResourceState(ResourceState value) {
 		D3D12_RESOURCE_STATES state = {};
 
-		if (hasFlag(value, ResourceState::SHADER_RESOURCE)) {
+		if (has_flag(value, ResourceState::SHADER_RESOURCE)) {
 			state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		}
-		if (hasFlag(value, ResourceState::RENDER_TARGET)) {
+		if (has_flag(value, ResourceState::UNORDERED_ACCESS)) {
+			state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		}
+		if (has_flag(value, ResourceState::RENDER_TARGET)) {
 			state |= D3D12_RESOURCE_STATE_RENDER_TARGET;
 		}
-		if (hasFlag(value, ResourceState::DEPTH_WRITE)) {
+		if (has_flag(value, ResourceState::DEPTH_WRITE)) {
 			state |= D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		}
-		if (hasFlag(value, ResourceState::DEPTH_READ)) {
+		if (has_flag(value, ResourceState::DEPTH_READ)) {
 			state |= D3D12_RESOURCE_STATE_DEPTH_READ;
 		}
 

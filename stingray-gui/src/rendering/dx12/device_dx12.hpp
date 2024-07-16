@@ -10,11 +10,10 @@
 #include <string>
 #include <vector>
 
+using namespace Microsoft::WRL;
+
 namespace sr {
 	class GraphicsDevice_DX12 final : public GraphicsDevice {
-		template <typename T>
-		using ComPtr = Microsoft::WRL::ComPtr<T>;
-
 	public:
 		GraphicsDevice_DX12(int width, int height, HWND window);
 		~GraphicsDevice_DX12();

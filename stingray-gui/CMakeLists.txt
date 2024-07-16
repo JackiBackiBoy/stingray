@@ -60,6 +60,14 @@ set(SOURCE_FILES
     # Rendering
     ${SOURCE_DIR}/rendering/device.hpp
     ${SOURCE_DIR}/rendering/graphics.hpp
+    ${SOURCE_DIR}/rendering/render_graph.cpp
+    ${SOURCE_DIR}/rendering/render_graph.hpp
+
+    # Renderpasses
+    ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/ray_tracing_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/ray_tracing_pass.hpp
 
     # Utility
     ${SOURCE_DIR}/utility/json.hpp

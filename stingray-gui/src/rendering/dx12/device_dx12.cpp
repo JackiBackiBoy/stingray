@@ -19,35 +19,6 @@ namespace sr {
 	ComPtr<IDxcUtils> utils{};
 	ComPtr<IDxcIncludeHandler> includeHandler{};
 
-	class CustomIncludeHandler : public IDxcIncludeHandler {
-	public:
-		HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override {
-			ComPtr<IDxcBlobEncoding> pEncoding;
-			std::wstring path = pFilename;
-
-			if (IncludedFiles.find(path) != IncludedFiles.end()) {
-				// Return empty string blob if this file has been included before
-				static const char nullStr[] = " ";
-				utils->CreateBlobFromPinned(nullStr, ARRAYSIZE(nullStr), DXC_CP_ACP, pEncoding.GetAddressOf());
-				*ppIncludeSource = pEncoding.Detach();
-				return S_OK;
-			}
-
-			HRESULT hr = utils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
-			if (SUCCEEDED(hr)) {
-				IncludedFiles.insert(path);
-				*ppIncludeSource = pEncoding.Detach();
-			}
-			return hr;
-		}
-
-		HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override { return E_NOINTERFACE; }
-		ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
-		ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
-
-		std::unordered_set<std::wstring> IncludedFiles;
-	};
-
 	inline void ThrowIfFailed(HRESULT hr) {
 		if (FAILED(hr)) {
 			// Set a breakpoint on this line to catch DirectX API errors
@@ -351,7 +322,7 @@ namespace sr {
 		}
 
 		// Create CBV if requested
-		if (hasFlag(info.bindFlags, BindFlag::UNIFORM_BUFFER)) {
+		if (has_flag(info.bindFlags, BindFlag::UNIFORM_BUFFER)) {
 			const D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {
 				.BufferLocation = internalState->gpuAddress,
 				.SizeInBytes = static_cast<UINT>(info.size)
@@ -366,7 +337,7 @@ namespace sr {
 		}
 
 		// Create SRV for Structured Buffer
-		if (hasFlag(info.bindFlags, BindFlag::SHADER_RESOURCE) && hasFlag(info.miscFlags, MiscFlag::BUFFER_STRUCTURED)) {
+		if (has_flag(info.bindFlags, BindFlag::SHADER_RESOURCE) && has_flag(info.miscFlags, MiscFlag::BUFFER_STRUCTURED)) {
 			const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
 				.Format = DXGI_FORMAT_UNKNOWN,
 				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
@@ -383,7 +354,7 @@ namespace sr {
 		}
 
 		// Create SRV for raw buffer (aka Byte Address Buffer)
-		if (hasFlag(info.bindFlags, BindFlag::SHADER_RESOURCE) && hasFlag(info.miscFlags, MiscFlag::BUFFER_RAW)) {
+		if (has_flag(info.bindFlags, BindFlag::SHADER_RESOURCE) && has_flag(info.miscFlags, MiscFlag::BUFFER_RAW)) {
 			const D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {
 				.Format = DXGI_FORMAT_R32_TYPELESS,
 				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
@@ -480,7 +451,6 @@ namespace sr {
 		internalState->rootParameterIndexLUT.insert({ "bindlessTextures", 1 });
 		internalState->rootParameterIndexLUT.insert({ "pushConstant", 2 });
 		internalState->rootParameterIndexLUT.insert({ "samplerRange", 3 });
-		//internalState->rootParameterIndexLUT.insert({ "depthSampler", 4 });
 
 		// Vertex shader
 		if (info.vertexShader != nullptr) {
@@ -825,7 +795,7 @@ namespace sr {
 		};
 
 		// DXR shader libraries require the ID3D12LibraryReflection
-		if (hasFlag(stage, ShaderStage::LIBRARY)) {
+		if (has_flag(stage, ShaderStage::LIBRARY)) {
 			ComPtr<ID3D12LibraryReflection> libraryReflection = nullptr;
 			utils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(&libraryReflection));
 
@@ -1008,15 +978,15 @@ namespace sr {
 			resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 		}
 
-		if (hasFlag(info.bindFlags, BindFlag::RENDER_TARGET)) {
+		if (has_flag(info.bindFlags, BindFlag::RENDER_TARGET)) {
 			resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 			resourceFlags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 		}
-		if (hasFlag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
+		if (has_flag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
 			resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			resourceFlags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 		}
-		if (hasFlag(info.bindFlags, BindFlag::UNORDERED_ACCESS)) {
+		if (has_flag(info.bindFlags, BindFlag::UNORDERED_ACCESS)) {
 			resourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 			resourceFlags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		}
@@ -1112,7 +1082,7 @@ namespace sr {
 				m_CopyAllocator.submit(copyCommand);
 			}
 			else {
-				if (hasFlag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
+				if (has_flag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
 					const D3D12_CLEAR_VALUE clearValue = {
 						.Format = resourceDesc.Format,
 						.DepthStencil = {
@@ -1130,7 +1100,7 @@ namespace sr {
 						IID_PPV_ARGS(&internalState->resource)
 					));
 				}
-				else if (hasFlag(info.bindFlags, BindFlag::RENDER_TARGET)) {
+				else if (has_flag(info.bindFlags, BindFlag::RENDER_TARGET)) {
 					const D3D12_CLEAR_VALUE clearValue = {
 						.Format = resourceDesc.Format,
 						.Color = { 0.0f, 0.0f, 0.0f, 1.0f }
@@ -1159,12 +1129,12 @@ namespace sr {
 		}
 
 		// Create shader resource view (SRV) if requested
-		if (hasFlag(info.bindFlags, BindFlag::SHADER_RESOURCE)) {
+		if (has_flag(info.bindFlags, BindFlag::SHADER_RESOURCE)) {
 			internalState->subResourceType = SubresourceType::SRV;
 
 			DXGI_FORMAT srvFormat = resourceDesc.Format;
 
-			if (hasFlag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
+			if (has_flag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
 				if (info.format == Format::D32_FLOAT) {
 					srvFormat = DXGI_FORMAT_R32_FLOAT;
 				}
@@ -1187,7 +1157,7 @@ namespace sr {
 		}
 
 		// Create render target view (RTV) if requested
-		if (hasFlag(info.bindFlags, BindFlag::RENDER_TARGET)) {
+		if (has_flag(info.bindFlags, BindFlag::RENDER_TARGET)) {
 			internalState->subResourceType = SubresourceType::RTV;
 
 			const D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {
@@ -1199,7 +1169,7 @@ namespace sr {
 		}
 
 		// Create depth stencil view (DSV) if requested
-		if (hasFlag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
+		if (has_flag(info.bindFlags, BindFlag::DEPTH_STENCIL)) {
 			internalState->subResourceType = SubresourceType::DSV;
 
 			const D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {
@@ -1212,7 +1182,7 @@ namespace sr {
 		}
 
 		// Create unordered access view (UAV) if requested
-		if (hasFlag(info.bindFlags, BindFlag::UNORDERED_ACCESS)) {
+		if (has_flag(info.bindFlags, BindFlag::UNORDERED_ACCESS)) {
 			internalState->subResourceType = SubresourceType::UAV;
 
 			const D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
@@ -2231,7 +2201,7 @@ namespace sr {
 				return internalTexture->srvDescriptor.index;
 			case SubresourceType::UAV:
 				return internalTexture->uavDescriptor.index;
-			}	
+			}
 		}
 		else if (resource.type == Resource::Type::BUFFER) {
 			auto internalBuffer = (Buffer_DX12*)resource.internalState.get();

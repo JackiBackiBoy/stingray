@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "../core/enum_flags.hpp"
+
 namespace sr {
 	enum class GraphicsAPI {
 		DX12, // TODO: Work in progress
@@ -24,23 +26,6 @@ namespace sr {
 		SHADING_RATE = 1 << 7,
 	};
 
-	inline BindFlag operator|(BindFlag a, BindFlag b) {
-		return static_cast<BindFlag>(static_cast<int>(a) | static_cast<int>(b));
-	}
-
-	inline BindFlag& operator|=(BindFlag& a, BindFlag b) {
-		a = a | b;
-		return a;
-	}
-
-	inline BindFlag operator&(BindFlag a, BindFlag b) {
-		return static_cast<BindFlag>(static_cast<int>(a) & static_cast<int>(b));
-	}
-
-	inline bool hasFlag(BindFlag lhs, BindFlag rhs) {
-		return (lhs & rhs) == rhs;
-	}
-
 	enum class QueueType {
 		DIRECT,
 		COPY,
@@ -56,23 +41,6 @@ namespace sr {
 		BUFFER_STRUCTURED = 1 << 3,
 	};
 
-	inline MiscFlag operator|(MiscFlag a, MiscFlag b) {
-		return static_cast<MiscFlag>(static_cast<int>(a) | static_cast<int>(b));
-	}
-
-	inline MiscFlag& operator|=(MiscFlag& a, MiscFlag b) {
-		a = a | b;
-		return a;
-	}
-
-	inline MiscFlag operator&(MiscFlag a, MiscFlag b) {
-		return static_cast<MiscFlag>(static_cast<int>(a) & static_cast<int>(b));
-	}
-
-	inline bool hasFlag(MiscFlag lhs, MiscFlag rhs) {
-		return (lhs & rhs) == rhs;
-	}
-
 	enum class ShaderStage {
 		NONE = 0,
 		VERTEX = 1 << 0,
@@ -80,18 +48,6 @@ namespace sr {
 		COMPUTE = 1 << 2,
 		LIBRARY = 1 << 3,
 	};
-
-	inline ShaderStage operator|(ShaderStage a, ShaderStage b) {
-		return static_cast<ShaderStage>(static_cast<int>(a) | static_cast<int>(b));
-	}
-
-	inline ShaderStage operator&(ShaderStage a, ShaderStage b) {
-		return static_cast<ShaderStage>(static_cast<int>(a) & static_cast<int>(b));
-	}
-
-	inline bool hasFlag(ShaderStage lhs, ShaderStage rhs) {
-		return (lhs & rhs) == rhs;
-	}
 
 	enum class Blend {
 		ZERO,
@@ -288,23 +244,6 @@ namespace sr {
 		COPY_SRC = 1 << 5, // copy from
 		COPY_DST = 1 << 6, // copy to
 	};
-
-	inline ResourceState operator|(ResourceState a, ResourceState b) {
-		return static_cast<ResourceState>(static_cast<int>(a) | static_cast<int>(b));
-	}
-
-	inline ResourceState& operator|=(ResourceState& a, ResourceState b) {
-		a = a | b;
-		return a;
-	}
-
-	constexpr ResourceState operator&(ResourceState a, ResourceState b) {
-		return static_cast<ResourceState>(static_cast<int>(a) & static_cast<int>(b));
-	}
-
-	constexpr bool hasFlag(ResourceState lhs, ResourceState rhs) {
-		return (lhs & rhs) == rhs;
-	}
 
 	enum class SamplerBorderColor {
 		TRANSPARENT_BLACK,
@@ -675,4 +614,13 @@ namespace sr {
 	constexpr T alignTo(T value, T alignment) {
 		return ((value + alignment - T(1)) / alignment) * alignment;
 	}
+
+	template<>
+	struct enable_bitmask_operators<BindFlag> { static const bool enable = true; };
+	template<>
+	struct enable_bitmask_operators<MiscFlag> { static const bool enable = true; };
+	template<>
+	struct enable_bitmask_operators<ShaderStage> { static const bool enable = true; };
+	template<>
+	struct enable_bitmask_operators<ResourceState> { static const bool enable = true; };
 }
