@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "window.hpp"
+#include "frame_info.hpp"
 #include "../data/entity.hpp"
 #include "../managers/asset_manager.hpp"
 #include "../math/quat.hpp"
@@ -27,12 +28,6 @@ namespace sr {
 		virtual void onUpdate() = 0;
 
 	protected:
-		struct Camera {
-			glm::mat4 viewMatrix = { 1.0f };
-			glm::vec3 position = { 0.0f, 0.0f, -10.0f };
-			quat orientation = {};
-		};
-
 		struct alignas(256) PerFrameUBO {
 			glm::mat4 projectionMatrix = { 1.0f };
 			glm::mat4 viewMatrix = { 1.0f };
@@ -43,8 +38,8 @@ namespace sr {
 
 		void preInitialize();
 		void createEntities();
-		void update(float dt);
-		void render(float dt);
+		void update(FrameInfo& frameInfo);
+		void render(FrameInfo& frameInfo);
 
 		int m_Width = 0;
 		int m_Height = 0;
@@ -53,7 +48,7 @@ namespace sr {
 		std::unique_ptr<Window> m_Window = {};
 		std::unique_ptr<GraphicsDevice> m_Device = {};
 		std::unique_ptr<RenderGraph> m_RenderGraph = {};
-		Camera m_Camera = {};
+		FrameInfo m_FrameInfo = {};
 
 		SwapChain m_SwapChain = {};
 		Sampler m_LinearSampler = {};

@@ -1701,6 +1701,18 @@ namespace sr {
 		}
 	}
 
+	void GraphicsDevice_DX12::copyResource(const Resource* dst, const Resource* src, const CommandList& cmdList) {
+		auto internalDstResource = (Resource_DX12*)dst->internalState.get();
+		auto internalSrcResource = (Resource_DX12*)src->internalState.get();
+		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
+
+		// TODO: Allow for other resource copy operations
+		internalCmdList->getGraphicsCommandList()->CopyResource(
+			internalDstResource->resource.Get(),
+			internalSrcResource->resource.Get()
+		);
+	}
+
 	void GraphicsDevice_DX12::pushConstants(const void* data, uint32_t size, const CommandList& cmdList) {
 		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 

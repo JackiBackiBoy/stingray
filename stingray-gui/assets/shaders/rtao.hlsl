@@ -14,6 +14,7 @@ struct PerFrameData {
 struct PushConstant {
     uint gBufferPositionIndex;
     uint gBufferNormalIndex;
+    uint frameCount;
 };
 
 RaytracingAccelerationStructure Scene : register(t0, space0);
@@ -54,7 +55,7 @@ float shootAORay(in float3 origin, in float3 dir, in float minT, in float maxT) 
     aoRay.TMin = minT;
     aoRay.TMax = maxT;
 
-    TraceRay(Scene, RAY_FLAG_NONE, 0xFF, 0, 1, 0, aoRay, payload);
+    TraceRay(Scene, RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, 0, 1, 0, aoRay, payload);
 
     return payload.color.x;
 }
@@ -63,7 +64,7 @@ float shootAORay(in float3 origin, in float3 dir, in float minT, in float maxT) 
 void MyRaygenShader() {
     uint2 idx = DispatchRaysIndex().xy;
     uint2 numPixels = DispatchRaysDimensions().xy;
-    uint randSeed = initRand(idx.x + idx.y * numPixels.x + 1, 3);
+    uint randSeed = initRand(idx.x + idx.y * numPixels.x + 1, pushConstant.frameCount);
 
     Texture2D<float4> gBufferPositionTexture = ResourceDescriptorHeap[pushConstant.gBufferPositionIndex];
     Texture2D<float4> gBufferNormalTexture = ResourceDescriptorHeap[pushConstant.gBufferNormalIndex];
@@ -72,8 +73,8 @@ void MyRaygenShader() {
     float3 worldNormal = gBufferNormalTexture[idx].xyz;
 
     float aoValue = 1.0f;
-    float minT = 0.01f;
-    float maxT = 100.0f;
+    float minT = 0.001f;
+    float maxT = 10.0f;
 
     if (worldPos.w != 0.0f) {
         float3 worldDir = randomHemisphereFloat3(worldNormal, randSeed);
@@ -85,7 +86,7 @@ void MyRaygenShader() {
 
 [shader("closesthit")]
 void MyClosestHitShader(inout RayPayload payload, in MyAttributes attr) {
-    payload.color = float4(0, 0, 0, 1);
+    payload.color = float4(1, 1, 1, 1);
 }
 
 [shader("miss")]

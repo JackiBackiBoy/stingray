@@ -18,11 +18,22 @@ public:
 private:
 };
 
-int main() {
-    Sandbox* sandbox = new Sandbox();
-    sandbox->run();
+#ifdef SR_WINDOWS
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+	Sandbox* sandbox = new Sandbox();
+	sandbox->run();
 
-    delete sandbox;
-    sandbox = nullptr;
-    return 0;
+	delete sandbox;
+	sandbox = nullptr;
+	return 0;
 }
+#else
+int main() {
+	Sandbox* sandbox = new Sandbox();
+	sandbox->run();
+
+	delete sandbox;
+	sandbox = nullptr;
+	return 0;
+}
+#endif

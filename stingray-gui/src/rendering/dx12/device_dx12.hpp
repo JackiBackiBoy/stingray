@@ -44,6 +44,7 @@ namespace sr {
 		void bindIndexBuffer(const Buffer& indexBuffer, const CommandList& cmdList) override;
 		void bindSampler(const Sampler& sampler) override;
 		void bindResource(const Resource& res, const std::string& name, const Pipeline& pipeline, const CommandList& cmdList) override;
+		void copyResource(const Resource* dst, const Resource* src, const CommandList& cmdList) override;
 		void pushConstants(const void* data, uint32_t size, const CommandList& cmdList) override;
 		void pushConstantsCompute(const void* data, uint32_t size, const CommandList& cmdList) override;
 		void barrier(const GPUBarrier& barrier, const CommandList& cmdList) override;

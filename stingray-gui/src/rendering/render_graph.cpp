@@ -37,9 +37,16 @@ namespace sr {
 		return *attachment;
 	}
 
-	void RenderPass::execute(GraphicsDevice& device, const CommandList& cmdList) {
+	void RenderPass::execute(GraphicsDevice& device, const CommandList& cmdList, const FrameInfo& frameInfo) {
 		if (m_ExecuteCallback) {
-			m_ExecuteCallback(m_Graph, device, cmdList);
+			PassExecuteInfo executeInfo = {
+				.renderGraph = &m_Graph,
+				.device = &device,
+				.cmdList = &cmdList,
+				.frameInfo = &frameInfo
+			};
+
+			m_ExecuteCallback(executeInfo);
 		}
 	}
 
@@ -66,7 +73,7 @@ namespace sr {
 		recurseBuild(m_Passes.size() - 1);
 	}
 
-	void RenderGraph::execute(SwapChain& swapChain, const CommandList& cmdList) {
+	void RenderGraph::execute(SwapChain& swapChain, const CommandList& cmdList, const FrameInfo& frameInfo) {
 		bool clearTargets = true;
 		bool encounteredFirstRootPass = false;
 
@@ -144,17 +151,15 @@ namespace sr {
 
 			if (isRootPass) {
 				m_Device.beginRenderPass(swapChain, passInfo, cmdList, clearTargets);
-				pass.execute(m_Device, cmdList);
+				pass.execute(m_Device, cmdList, frameInfo);
 				m_Device.endRenderPass(swapChain, cmdList);
 			}
 			else {
 				m_Device.beginRenderPass(passInfo, cmdList, clearTargets);
-				pass.execute(m_Device, cmdList);
+				pass.execute(m_Device, cmdList, frameInfo);
 				m_Device.endRenderPass();
 			}
 		}
-
-		//m_Device.present(swapChain);
 	}
 
 	RenderPassAttachment* RenderGraph::getAttachment(const std::string& name) {

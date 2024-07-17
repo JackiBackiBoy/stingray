@@ -28,24 +28,26 @@ namespace sr::fstripass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	void onExecute(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
+	void onExecute(PassExecuteInfo& executeInfo) {
+		RenderGraph& graph = *executeInfo.renderGraph;
+		GraphicsDevice& device = *executeInfo.device;
+		const CommandList& cmdList = *executeInfo.cmdList;
+
 		if (!g_Initialized) {
 			initialize(device);
 			g_Initialized = true;
 		}
 
-		//auto rtOutputAttachment = graph.getAttachment("RTOutput");
-		//PushConstant pushConstant = { device.getDescriptorIndex(rtOutputAttachment->texture) };
 		auto positionAttachment = graph.getAttachment("Position");
 		auto albedoAttachment = graph.getAttachment("Albedo");
 		auto normalAttachment = graph.getAttachment("Normal");
-		auto aoAttachment = graph.getAttachment("AmbientOcclusion");
+		auto accumulationAttachment = graph.getAttachment("AOAccumulation");
 
 		const PushConstant pushConstant = {
 			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
 			.gBufferAlbedoIndex = device.getDescriptorIndex(albedoAttachment->texture),
 			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
-			.aoIndex = device.getDescriptorIndex(aoAttachment->texture)
+			.aoIndex = device.getDescriptorIndex(accumulationAttachment->texture)
 		};
 
 		device.bindPipeline(g_Pipeline, cmdList);

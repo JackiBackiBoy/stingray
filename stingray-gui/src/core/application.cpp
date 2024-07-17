@@ -2,6 +2,7 @@
 
 #include <chrono>
 
+#include "../rendering/renderpasses/accumulation_pass.hpp"
 #include "../rendering/renderpasses/gbuffer_pass.hpp"
 #include "../rendering/renderpasses/rtao_pass.hpp"
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
@@ -57,11 +58,12 @@ namespace sr {
 				DispatchMessage(&msg);
 			}
 			else {
-				const float dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+				m_FrameInfo.dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+				m_FrameInfo.cameraMoved = false;
 				lastTime = currentTime;
 
-				update(dt);
-				render(dt);
+				update(m_FrameInfo);
+				render(m_FrameInfo);
 			}
 		}
 
@@ -133,6 +135,23 @@ namespace sr {
 			.persistentMap = true
 		};
 
+		Camera& camera = m_FrameInfo.camera;
+		camera.position = { 4.5f, 1.0f, -7.0 };
+		camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(-32.0f));
+
+		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
+		const glm::vec3 qUp = quatRotateVector(camera.orientation, { 0.0f, 1.0f, 0.0f });
+		const glm::vec3 qForward = quatRotateVector(camera.orientation, { 0.0f, 0.0f, 1.0f });
+
+		const float aspectRatio = (float)m_Width / m_Height;
+		camera.projectionMatrix = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
+		camera.viewMatrix = glm::lookAt(camera.position, camera.position + qForward, qUp);
+
+		m_PerFrameUBOData.projectionMatrix = camera.projectionMatrix;
+		m_PerFrameUBOData.viewMatrix = camera.viewMatrix;
+		m_PerFrameUBOData.invViewProjection = glm::inverse(camera.projectionMatrix * camera.viewMatrix);
+		m_PerFrameUBOData.cameraPosition = camera.position;
+
 		for (size_t f = 0; f < GraphicsDevice::NUM_BUFFERS; ++f) {
 			m_Device->createBuffer(perFrameUBOInfo, m_PerFrameUBOs[f], &m_PerFrameUBOData);
 		}
@@ -143,20 +162,27 @@ namespace sr {
 
 		// Rendergraph
 		auto& gBufferPass = m_RenderGraph->addPass("GBufferPass");
-		gBufferPass.addOutputAttachment("Position", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R16G16B16A16_FLOAT });
+		gBufferPass.addOutputAttachment("Position", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R32G32B32A32_FLOAT });
 		gBufferPass.addOutputAttachment("Albedo", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
 		gBufferPass.addOutputAttachment("Normal", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R16G16B16A16_FLOAT });
 		gBufferPass.addOutputAttachment("Depth", { AttachmentType::DEPTH_STENCIL, uWidth, uHeight, 1, Format::D32_FLOAT });
-		gBufferPass.setExecuteCallback([&](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
-			sr::gbufferpass::onExecute(graph, device, cmdList, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		gBufferPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::gbufferpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
 		});
 
 		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
 		rtaoPass.addInputAttachment("Position");
 		rtaoPass.addInputAttachment("Normal");
 		rtaoPass.addOutputAttachment("AmbientOcclusion", { AttachmentType::RW_TEXTURE, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
-		rtaoPass.setExecuteCallback([&](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
-			sr::rtaopass::onExecute(graph, device, cmdList, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		rtaoPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::rtaopass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		});
+
+		auto& accumulationpass = m_RenderGraph->addPass("AccumulationPass");
+		accumulationpass.addInputAttachment("AmbientOcclusion");
+		accumulationpass.addOutputAttachment("AOAccumulation", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
+		accumulationpass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::accumulationpass::onExecute(executeInfo);
 		});
 
 		auto& fullscreenTriPass = m_RenderGraph->addPass("FullscreenTriPass");
@@ -164,8 +190,9 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("Albedo");
 		fullscreenTriPass.addInputAttachment("Normal");
 		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
-		fullscreenTriPass.setExecuteCallback([](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
-			sr::fstripass::onExecute(graph, device, cmdList);
+		fullscreenTriPass.addInputAttachment("AOAccumulation");
+		fullscreenTriPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
+			sr::fstripass::onExecute(executeInfo);
 		});
 
 		m_RenderGraph->build();
@@ -229,7 +256,7 @@ namespace sr {
 		statue->orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(90.0f)) * statue->orientation;
 	}
 
-	void Application::update(float dt) {
+	void Application::update(FrameInfo& frameInfo) {
 		sr::rawinput::update();
 		sr::rawinput::RawKeyboardState keyboard = {};
 		sr::rawinput::RawMouseState mouse = {};
@@ -238,51 +265,66 @@ namespace sr {
 		sr::rawinput::getMouseState(mouse);
 
 		// Camera movement
+		Camera& camera = frameInfo.camera;
+		bool& cameraMoved = frameInfo.cameraMoved;
 		const float cameraMoveSpeed = 5.0f;
 
 		if (mouse.mouse3) {
-			m_Camera.orientation = m_Camera.orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, mouse.deltaY * dt); // pitch
-			m_Camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, mouse.deltaX * dt) * m_Camera.orientation; // yaw
+			if (mouse.deltaY != 0.0f) {
+				camera.orientation = camera.orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, mouse.deltaY * frameInfo.dt); // pitch
+				cameraMoved = true;
+			}
+
+			if (mouse.deltaX != 0.0f) {
+				camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, mouse.deltaX * frameInfo.dt) * camera.orientation; // yaw
+				cameraMoved = true;
+			}
 		}
 
-		const glm::vec3 qRight = quatRotateVector(m_Camera.orientation, { 1.0f, 0.0f, 0.0f });
-		const glm::vec3 qUp = quatRotateVector(m_Camera.orientation, { 0.0f, 1.0f, 0.0f });
-		const glm::vec3 qForward = quatRotateVector(m_Camera.orientation, { 0.0f, 0.0f, 1.0f });
+		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
+		const glm::vec3 qUp = quatRotateVector(camera.orientation, { 0.0f, 1.0f, 0.0f });
+		const glm::vec3 qForward = quatRotateVector(camera.orientation, { 0.0f, 0.0f, 1.0f });
 
 		if (sr::rawinput::isDown(KeyCode::W)) {
-			m_Camera.position += qForward * cameraMoveSpeed * dt;
+			camera.position += qForward * cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 		if (sr::rawinput::isDown(KeyCode::A)) {
-			m_Camera.position -= qRight * cameraMoveSpeed * dt;
+			camera.position -= qRight * cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 		if (sr::rawinput::isDown(KeyCode::S)) {
-			m_Camera.position -= qForward * cameraMoveSpeed * dt;
+			camera.position -= qForward * cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 		if (sr::rawinput::isDown(KeyCode::D)) {
-			m_Camera.position += qRight * cameraMoveSpeed * dt;
+			camera.position += qRight * cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 
 		if (sr::rawinput::isDown(KeyCode::Space)) {
-			m_Camera.position.y += cameraMoveSpeed * dt;
+			camera.position.y += cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 		if (sr::rawinput::isDown(KeyCode::LeftControl)) {
-			m_Camera.position.y -= cameraMoveSpeed * dt;
+			camera.position.y -= cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
 		}
 
 		// Update per-frame data
-		m_Camera.viewMatrix = glm::lookAt(m_Camera.position, m_Camera.position + qForward, qUp);
-		m_PerFrameUBOData.cameraPosition = m_Camera.position;
+		const float aspectRatio = (float)m_Width / m_Height;
+		camera.projectionMatrix = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
+		camera.viewMatrix = glm::lookAt(camera.position, camera.position + qForward, qUp);
 
-		float aspectRatio = (float)m_Width / m_Height;
-		glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
+		m_PerFrameUBOData.projectionMatrix = camera.projectionMatrix;
+		m_PerFrameUBOData.viewMatrix = camera.viewMatrix;
+		m_PerFrameUBOData.invViewProjection = glm::inverse(camera.projectionMatrix * camera.viewMatrix);
+		m_PerFrameUBOData.cameraPosition = camera.position;
 
-		m_PerFrameUBOData.projectionMatrix = proj;
-		m_PerFrameUBOData.viewMatrix = m_Camera.viewMatrix;
-		m_PerFrameUBOData.invViewProjection = glm::inverse(proj * m_Camera.viewMatrix);
 		std::memcpy(m_PerFrameUBOs[m_Device->getBufferIndex()].mappedData, &m_PerFrameUBOData, sizeof(m_PerFrameUBOData));
 	}
 
-	void Application::render(float dt) {
+	void Application::render(FrameInfo& frameInfo) {
 		CommandList cmdList = m_Device->beginCommandList(QueueType::DIRECT);
 		{
 			const Viewport viewport = {
@@ -291,7 +333,7 @@ namespace sr {
 			};
 			m_Device->bindViewport(viewport, cmdList);
 
-			m_RenderGraph->execute(m_SwapChain, cmdList);
+			m_RenderGraph->execute(m_SwapChain, cmdList, m_FrameInfo);
 		}
 		m_Device->submitCommandLists(m_SwapChain);
 	}

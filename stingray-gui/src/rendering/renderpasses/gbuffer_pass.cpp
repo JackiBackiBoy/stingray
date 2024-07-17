@@ -43,7 +43,7 @@ namespace sr::gbufferpass {
 			},
 			.numRenderTargets = 3,
 			.renderTargetFormats = {
-				Format::R16G16B16A16_FLOAT, // position
+				Format::R32G32B32A32_FLOAT, // position // TODO: Remove this and get position from depth instead, it will increase perf massively
 				Format::R8G8B8A8_UNORM, // albedo
 				Format::R16G16B16A16_FLOAT, // normal
 			},
@@ -53,7 +53,11 @@ namespace sr::gbufferpass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	void onExecute(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList, Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+		RenderGraph& graph = *executeInfo.renderGraph;
+		GraphicsDevice& device = *executeInfo.device;
+		const CommandList& cmdList = *executeInfo.cmdList;
+
 		if (!g_Initialized) {
 			initialize(device);
 			g_Initialized = true;

@@ -41,6 +41,7 @@ namespace sr {
 		virtual void bindIndexBuffer(const Buffer& indexBuffer, const CommandList& cmdList) = 0;
 		virtual void bindSampler(const Sampler& sampler) = 0;
 		virtual void bindResource(const Resource& res, const std::string& name, const Pipeline& pipeline, const CommandList& cmdList) = 0;
+		virtual void copyResource(const Resource* dst, const Resource* src, const CommandList& cmdList) = 0;
 		virtual void pushConstants(const void* data, uint32_t size, const CommandList& cmdList) = 0;
 		virtual void pushConstantsCompute(const void* data, uint32_t size, const CommandList& cmdList) = 0;
 		virtual void barrier(const GPUBarrier& barrier, const CommandList& cmdList) = 0;

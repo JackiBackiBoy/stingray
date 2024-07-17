@@ -36,6 +36,7 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/core/application.cpp
     ${SOURCE_DIR}/core/application.hpp
     ${SOURCE_DIR}/core/enum_flags.hpp
+    ${SOURCE_DIR}/core/frame_info.hpp
     ${SOURCE_DIR}/core/utilities.cpp
     ${SOURCE_DIR}/core/utilities.hpp
     ${SOURCE_DIR}/core/window.hpp
@@ -64,6 +65,8 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/rendering/render_graph.hpp
 
     # Renderpasses
+    ${SOURCE_DIR}/rendering/renderpasses/accumulation_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/accumulation_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/gbuffer_pass.cpp
@@ -97,10 +100,10 @@ elseif(APPLE)
 
 endif()
 
-add_executable(stingray-gui ${SOURCE_FILES} ${SOURCE_FILES_PLATFORM})
-
 # Platform-specific options
 if (WIN32)
+    add_executable(stingray-gui WIN32 ${SOURCE_FILES} ${SOURCE_FILES_PLATFORM})
+
     set(DXC_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxc/include/)
     set(GLM_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/glm/include/)
 

@@ -7,7 +7,7 @@ namespace sr::uipass {
 
 	}
 
-	void onExecute(RenderGraph& renderGraph, GraphicsDevice& device, const CommandList& cmdList) {
+	void onExecute(PassExecuteInfo& executeInfo) {
 		if (!g_Initialized) {
 
 			g_Initialized = true;

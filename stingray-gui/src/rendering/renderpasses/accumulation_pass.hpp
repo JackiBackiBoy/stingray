@@ -2,6 +2,6 @@
 
 #include "../render_graph.hpp"
 
-namespace sr::fstripass {
+namespace sr::accumulationpass {
 	void onExecute(PassExecuteInfo& executeInfo);
 }

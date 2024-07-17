@@ -415,6 +415,13 @@ namespace sr {
 		if (has_flag(value, ResourceState::UNORDERED_ACCESS)) {
 			state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		}
+		if (has_flag(value, ResourceState::COPY_SRC)) {
+			state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
+		}
+		if (has_flag(value, ResourceState::COPY_DST)) {
+			state |= D3D12_RESOURCE_STATE_COPY_DEST;
+		}
+
 		if (has_flag(value, ResourceState::RENDER_TARGET)) {
 			state |= D3D12_RESOURCE_STATE_RENDER_TARGET;
 		}

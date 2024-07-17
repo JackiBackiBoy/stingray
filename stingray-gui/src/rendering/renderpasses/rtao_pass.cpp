@@ -18,6 +18,7 @@ namespace sr::rtaopass {
 	struct PushConstant {
 		uint32_t gBufferPositionIndex;
 		uint32_t gBufferNormalIndex;
+		uint32_t frameCount;
 	};
 
 	bool g_Initialized = false;
@@ -176,7 +177,11 @@ namespace sr::rtaopass {
 		device.createBuffer(materialInfoBufferInfo, g_MaterialInfoBuffer, g_MaterialInfoData.data());
 	}
 
-	void onExecute(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList, const Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+		RenderGraph& graph = *executeInfo.renderGraph;
+		GraphicsDevice& device = *executeInfo.device;
+		const CommandList& cmdList = *executeInfo.cmdList;
+		
 		if (!g_Initialized) {
 			initialize(device, entities);
 			g_Initialized = true;
@@ -207,7 +212,8 @@ namespace sr::rtaopass {
 
 		const PushConstant pushConstant = {
 			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
-			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture)
+			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
+			.frameCount = (uint32_t)device.getFrameCount() % 1024
 		};
 
 		device.pushConstantsCompute(&pushConstant, sizeof(pushConstant), cmdList);

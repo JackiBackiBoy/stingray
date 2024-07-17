@@ -26,5 +26,5 @@ namespace sr::uipass {
 	//void setCursorOriginX(float x);
 	//void setCursorOriginY(float y);
 
-	void onExecute(RenderGraph& renderGraph, GraphicsDevice& device, const CommandList& cmdList);
+	void onExecute(PassExecuteInfo& executeInfo);
 }

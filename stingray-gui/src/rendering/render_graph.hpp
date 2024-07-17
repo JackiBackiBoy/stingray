@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "device.hpp"
+#include "../core/frame_info.hpp"
 
 namespace sr {
 	class RenderGraph;
@@ -35,6 +36,13 @@ namespace sr {
 		std::vector<unsigned int> readInPasses = {};
 	};
 
+	struct PassExecuteInfo {
+		RenderGraph* renderGraph;
+		GraphicsDevice* device;
+		const CommandList* cmdList;
+		const FrameInfo* frameInfo;
+	};
+
 	class RenderPass {
 	public:
 		RenderPass(RenderGraph& renderGraph, unsigned int index) : m_Graph(renderGraph), m_Index(index) {}
@@ -42,19 +50,19 @@ namespace sr {
 
 		RenderPassAttachment& addInputAttachment(const std::string& name);
 		RenderPassAttachment& addOutputAttachment(const std::string& name, const AttachmentInfo& info);
-		void execute(GraphicsDevice& device, const CommandList& cmdList);
+		void execute(GraphicsDevice& device, const CommandList& cmdList, const FrameInfo& frameInfo);
 
 		inline std::vector<RenderPassAttachment*>& getInputAttachments() { return m_InputAttachments; }
 		inline std::vector<RenderPassAttachment*>& getOutputAttachments() { return m_OutputAttachments; }
 
-		inline void setExecuteCallback(std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList)> callback) {
+		inline void setExecuteCallback(std::function<void(PassExecuteInfo& executeInfo)> callback) {
 			m_ExecuteCallback = std::move(callback);
 		}
 
 	private:
 		RenderGraph& m_Graph;
 		unsigned int m_Index;
-		std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList)> m_ExecuteCallback;
+		std::function<void(PassExecuteInfo& executeInfo)> m_ExecuteCallback;
 
 		std::vector<RenderPassAttachment*> m_OutputAttachments = {};
 		std::vector<RenderPassAttachment*> m_InputAttachments = {};
@@ -68,7 +76,7 @@ namespace sr {
 		RenderPass& addPass(const std::string& name);
 
 		void build();
-		void execute(SwapChain& swapChain, const CommandList& cmdList);
+		void execute(SwapChain& swapChain, const CommandList& cmdList, const FrameInfo& frameInfo);
 
 		RenderPassAttachment* getAttachment(const std::string& name);
 
