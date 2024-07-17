@@ -66,8 +66,12 @@ set(SOURCE_FILES
     # Renderpasses
     ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/fullscreen_tri_pass.hpp
-    ${SOURCE_DIR}/rendering/renderpasses/ray_tracing_pass.cpp
-    ${SOURCE_DIR}/rendering/renderpasses/ray_tracing_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/gbuffer_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/gbuffer_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/ui_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/ui_pass.hpp
 
     # Utility
     ${SOURCE_DIR}/utility/json.hpp

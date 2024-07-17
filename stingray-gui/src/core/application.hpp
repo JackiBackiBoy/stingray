@@ -17,7 +17,7 @@
 namespace sr {
 	class Application {
 	public:
-		Application(const std::string& title);
+		Application(const std::string& title, int width, int height);
 		virtual ~Application();
 
 		void run();
@@ -34,9 +34,11 @@ namespace sr {
 		};
 
 		struct alignas(256) PerFrameUBO {
-			glm::mat4 invViewProjection = {};
+			glm::mat4 projectionMatrix = { 1.0f };
+			glm::mat4 viewMatrix = { 1.0f };
+			glm::mat4 invViewProjection = { 1.0f };
 			glm::vec3 cameraPosition = { 0.0f, 0.0f, 0.0f };
-			float pad1 = 0.0f;
+			uint32_t pad1 = 0;
 		};
 
 		void preInitialize();
@@ -61,6 +63,11 @@ namespace sr {
 		// Entities and assets (temporary)
 		Asset m_CubeModel = {};
 		Asset m_PlaneModel = {};
+		Asset m_StatueModel = {};
+
+		// Default resources
+		Texture m_DefaultAlbedoMap = {};
+		Texture m_DefaultNormalMap = {};
 
 		// TODO: Move this to a scene class or something
 		std::vector<Entity*> m_Entities = {};

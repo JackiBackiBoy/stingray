@@ -87,36 +87,32 @@ namespace sr {
 			std::string error = {};
 			std::string warning = {};
 
-			//char fullPath[128] = {};
-
-			//GetFullPathNameA(path.c_str(), 128, fullPath, nullptr);
-
 			if (!g_GltfLoader.LoadASCIIFromFile(&gltfModel, &error, &warning, path)) {
 				throw std::runtime_error("GLTF ERROR: Failed to load GLFT model!");
 			}
 
 			asset->model.meshes.resize(gltfModel.meshes.size());
-			//asset->model.materialTextures.resize(gltfModel.images.size());
+			asset->model.materialTextures.resize(gltfModel.images.size());
 
 			// Load material textures
-			//for (size_t i = 0; i < gltfModel.images.size(); ++i) {
-			//	const tinygltf::Image& gltfImage = gltfModel.images[i];
+			for (size_t i = 0; i < gltfModel.images.size(); ++i) {
+				const tinygltf::Image& gltfImage = gltfModel.images[i];
 
-			//	const TextureInfo textureInfo = {
-			//		.width = static_cast<uint32_t>(gltfImage.width),
-			//		.height = static_cast<uint32_t>(gltfImage.height),
-			//		.format = Format::R8G8B8A8_UNORM,
-			//		.usage = Usage::DEFAULT,
-			//		.bindFlags = BindFlag::SHADER_RESOURCE
-			//	};
+				const TextureInfo textureInfo = {
+					.width = static_cast<uint32_t>(gltfImage.width),
+					.height = static_cast<uint32_t>(gltfImage.height),
+					.format = Format::R8G8B8A8_UNORM,
+					.usage = Usage::DEFAULT,
+					.bindFlags = BindFlag::SHADER_RESOURCE
+				};
 
-			//	const SubresourceData textureSubresource = {
-			//		.data = gltfImage.image.data(),
-			//		.rowPitch = 4U * static_cast<uint32_t>(gltfImage.width),
-			//	};
+				const SubresourceData textureSubresource = {
+					.data = gltfImage.image.data(),
+					.rowPitch = 4U * static_cast<uint32_t>(gltfImage.width),
+				};
 
-			//	device.createTexture(textureInfo, asset->model.materialTextures[i], &textureSubresource);
-			//}
+				device.createTexture(textureInfo, asset->model.materialTextures[i], &textureSubresource);
+			}
 
 			uint32_t baseVertex = 0;
 			uint32_t baseIndex = 0;
@@ -193,16 +189,16 @@ namespace sr {
 							normals[k * 3 + 0]
 						};
 
-						//vertex.tangent = {
-						//	tangents[k * 4 + 0],
-						//	tangents[k * 4 + 1],
-						//	tangents[k * 4 + 2]
-						//};
+						vertex.tangent = {
+							tangents[k * 4 + 0],
+							tangents[k * 4 + 1],
+							tangents[k * 4 + 2]
+						};
 
-						//vertex.texCoord = {
-						//	texCoords[k * 2],
-						//	texCoords[k * 2 + 1]
-						//};
+						vertex.texCoord = {
+							texCoords[k * 2],
+							texCoords[k * 2 + 1]
+						};
 
 						asset->model.vertices.push_back(vertex);
 					}
@@ -218,8 +214,8 @@ namespace sr {
 					}
 
 					const tinygltf::Material& material = gltfModel.materials[gltfPrimitive.material];
-					//mesh.albedoMapIndex = material.pbrMetallicRoughness.baseColorTexture.index;
-					//mesh.normalMapIndex = material.normalTexture.index;
+					mesh.albedoMapIndex = (uint32_t)material.pbrMetallicRoughness.baseColorTexture.index;
+					mesh.normalMapIndex = (uint32_t)material.normalTexture.index;
 				}
 
 				baseVertex = static_cast<uint32_t>(asset->model.vertices.size());

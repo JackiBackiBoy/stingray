@@ -42,19 +42,19 @@ namespace sr {
 
 		RenderPassAttachment& addInputAttachment(const std::string& name);
 		RenderPassAttachment& addOutputAttachment(const std::string& name, const AttachmentInfo& info);
-		void execute(GraphicsDevice& device, const CommandList& commandList);
+		void execute(GraphicsDevice& device, const CommandList& cmdList);
 
 		inline std::vector<RenderPassAttachment*>& getInputAttachments() { return m_InputAttachments; }
 		inline std::vector<RenderPassAttachment*>& getOutputAttachments() { return m_OutputAttachments; }
 
-		inline void setExecuteCallback(std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& commandList)> callback) {
+		inline void setExecuteCallback(std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList)> callback) {
 			m_ExecuteCallback = std::move(callback);
 		}
 
 	private:
 		RenderGraph& m_Graph;
 		unsigned int m_Index;
-		std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& commandList)> m_ExecuteCallback;
+		std::function<void(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList)> m_ExecuteCallback;
 
 		std::vector<RenderPassAttachment*> m_OutputAttachments = {};
 		std::vector<RenderPassAttachment*> m_InputAttachments = {};
@@ -68,7 +68,7 @@ namespace sr {
 		RenderPass& addPass(const std::string& name);
 
 		void build();
-		void execute(SwapChain& swapChain, const CommandList& commandList);
+		void execute(SwapChain& swapChain, const CommandList& cmdList);
 
 		RenderPassAttachment* getAttachment(const std::string& name);
 

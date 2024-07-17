@@ -178,40 +178,8 @@ namespace sr {
 	void GraphicsDevice_DX12::createDescriptorHeaps() {
 		m_RTVDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_BUFFERS + MAX_RTV_DESCRIPTORS, this);
 		m_DSVDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 8, this);
-		m_PerFrameDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, GraphicsDevice::NUM_BUFFERS, this);
 		m_ResourceDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_TEXTURE_DESCRIPTORS, this); // TODO: We should probably chain together sums of resource types here in the `capacity` parameter
 		m_SamplerDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, MAX_SAMPLER_DESCRIPTORS, this);
-	}
-
-	void GraphicsDevice_DX12::createRTGlobalRootSignature() {
-		std::vector<D3D12_ROOT_PARAMETER1> rootParameters = {};
-
-		struct D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc {
-			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
-				.Desc_1_1 = {
-					.NumParameters = static_cast<UINT>(rootParameters.size()),
-					.pParameters = rootParameters.data(),
-					.NumStaticSamplers = 0U,
-					.pStaticSamplers = nullptr,
-					.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-						D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
-			}
-		};
-
-		ComPtr<ID3DBlob> rootSignatureBlob = nullptr;
-		ComPtr<ID3DBlob> rootSignatureErrorBlob = nullptr;
-		ThrowIfFailed(D3D12SerializeVersionedRootSignature(
-			&rootSignatureDesc,
-			&rootSignatureBlob,
-			&rootSignatureErrorBlob
-		));
-
-		ThrowIfFailed(m_Device->CreateRootSignature(
-			0U,
-			rootSignatureBlob->GetBufferPointer(),
-			rootSignatureBlob->GetBufferSize(),
-			IID_PPV_ARGS(&m_RTGlobalRootSignature)
-		));
 	}
 
 	void GraphicsDevice_DX12::createBuffer(const BufferInfo& info, Buffer& buffer, const void* data) {
@@ -316,7 +284,7 @@ namespace sr {
 			auto internalStagingBuffer = (Buffer_DX12*)stagingBuffer.internalState.get();
 
 			CopyAllocator::CopyCMD copyCommand = m_CopyAllocator.allocate(info.size);
-			copyCommand.commandList->CopyResource(internalState->resource.Get(), internalStagingBuffer->resource.Get());
+			copyCommand.cmdList->CopyResource(internalState->resource.Get(), internalStagingBuffer->resource.Get());
 
 			m_CopyAllocator.submit(copyCommand);
 		}
@@ -396,24 +364,6 @@ namespace sr {
 			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 
-		const D3D12_DESCRIPTOR_RANGE1 texture2DRange = {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-			.NumDescriptors = MAX_TEXTURE_DESCRIPTORS,
-			.BaseShaderRegister = 0U,
-			.RegisterSpace = 1U,
-			.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE | D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE,
-			.OffsetInDescriptorsFromTableStart = 0U
-		};
-
-		const D3D12_ROOT_PARAMETER1 texture2DTable = {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = {
-				.NumDescriptorRanges = 1U,
-				.pDescriptorRanges = &texture2DRange
-			},
-			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-		};
-
 		const D3D12_ROOT_PARAMETER1 pushConstant = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
 			.Constants = {
@@ -443,14 +393,12 @@ namespace sr {
 		};
 
 		rootParameters.push_back(perFrameDescriptor);
-		rootParameters.push_back(texture2DTable);
 		rootParameters.push_back(pushConstant);
 		rootParameters.push_back(samplerTable);
 
-		internalState->rootParameterIndexLUT.insert({ "perFrameData", 0 });
-		internalState->rootParameterIndexLUT.insert({ "bindlessTextures", 1 });
-		internalState->rootParameterIndexLUT.insert({ "pushConstant", 2 });
-		internalState->rootParameterIndexLUT.insert({ "samplerRange", 3 });
+		internalState->rootParameterIndexLUT.insert({ "g_PerFrameData", 0 });
+		internalState->rootParameterIndexLUT.insert({ "pushConstant", 1 });
+		internalState->rootParameterIndexLUT.insert({ "samplerRange", 2 });
 
 		// Vertex shader
 		if (info.vertexShader != nullptr) {
@@ -738,15 +686,14 @@ namespace sr {
 			DXC_ARG_ALL_RESOURCES_BOUND,
 		};
 
-		if constexpr (m_DebugEnabled) {
+		#ifdef _DEBUG
 			compilationArguments.push_back(DXC_ARG_DEBUG);
-		}
-		else {
+		#else
 			compilationArguments.push_back(DXC_ARG_OPTIMIZATION_LEVEL3);
-		}
+		#endif
 
 		// Load the shader source file to a blob
-		ComPtr<IDxcBlobEncoding> sourceBlob{};
+		ComPtr<IDxcBlobEncoding> sourceBlob = {};
 		ThrowIfFailed(utils->LoadFile(absolutePath, nullptr, &sourceBlob));
 
 		const DxcBuffer sourceBuffer = {
@@ -756,7 +703,7 @@ namespace sr {
 		};
 
 		// Compile the shader
-		ComPtr<IDxcResult> compiledShaderBuffer{};
+		ComPtr<IDxcResult> compiledShaderBuffer = {};
 		HRESULT hr = compiler->Compile(
 			&sourceBuffer,
 			compilationArguments.data(),
@@ -768,7 +715,7 @@ namespace sr {
 		assert(SUCCEEDED(hr) && "Failed to compile shader!");
 
 		if (FAILED(hr)) {
-			OutputDebugString(std::format(L"Failed to compiler shader at: {}", path).c_str());
+			OutputDebugString(std::format(L"Failed to compile shader at: {}", path).c_str());
 		}
 
 		// Get compilation errors (if any)
@@ -1070,7 +1017,7 @@ namespace sr {
 
 				CopyAllocator::CopyCMD copyCommand = m_CopyAllocator.allocate(0);
 
-				copyCommand.commandList->CopyTextureRegion(
+				copyCommand.cmdList->CopyTextureRegion(
 					&dst,
 					0U,
 					0U,
@@ -1227,6 +1174,7 @@ namespace sr {
 
 		bvh.info = info;
 		bvh.internalState = internalState;
+		bvh.type = Resource::Type::RAYTRACING_AS;
 
 		if (info.type == RayTracingASType::TLAS) {
 			auto internalInstanceBuffer = (Buffer_DX12*)info.tlas.instanceBuffer->internalState.get();
@@ -1326,9 +1274,9 @@ namespace sr {
 		createBuffer(scratchBufferInfo, internalState->scratchBuffer, nullptr);
 	}
 
-	void GraphicsDevice_DX12::buildRayTracingAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& commandList) {
+	void GraphicsDevice_DX12::buildRayTracingAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& cmdList) {
 		auto internalDstAS = (RayTracingAS_DX12*)dst.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
 		buildDesc.Inputs = internalDstAS->desc;
@@ -1444,15 +1392,27 @@ namespace sr {
 			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 
+		const D3D12_ROOT_PARAMETER1 pushConstant = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+			.Constants = {
+				.ShaderRegister = 0U,
+				.RegisterSpace = 2U,
+				.Num32BitValues = 32U, // 128 bytes
+			},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		};
+
 		rootParameters.push_back(accelerationStructureRootParam);
 		rootParameters.push_back(uavTable);
 		rootParameters.push_back(geometryInfoParam);
 		rootParameters.push_back(materialInfoParam);
+		rootParameters.push_back(pushConstant);
 
 		internalState->rootParameterIndexLUT.insert({ "Scene", 0 });
 		internalState->rootParameterIndexLUT.insert({ "RenderTarget", 1 });
 		internalState->rootParameterIndexLUT.insert({ "g_GeometryInfo", 2 });
 		internalState->rootParameterIndexLUT.insert({ "g_MaterialInfo", 3 });
+		internalState->rootParameterIndexLUT.insert({ "pushConstant", 4 });
 
 		// Retrieve root parameters
 		for (uint32_t i = 0; i < internalShader->rootParameters.size(); ++i) {
@@ -1524,10 +1484,10 @@ namespace sr {
 		));
 	}
 
-	void GraphicsDevice_DX12::bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& commandList) {
+	void GraphicsDevice_DX12::bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& cmdList) {
 		auto internalRTPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
 		auto internalRTOutputUAV = (Texture_DX12*)rtOutputUAV.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		internalCommandList->getGraphicsCommandList()->SetPipelineState1(internalRTPipeline->pso.Get());
 
@@ -1540,58 +1500,50 @@ namespace sr {
 		//internalCommandList->getGraphicsCommandList()->SetComputeRootDescriptorTable(1, m_ResourceDescriptorHeap.descriptorHeap->GetGPUDescriptorHandleForHeapStart());
 	}
 
-	void GraphicsDevice_DX12::bindRayTracingConstantBuffer(const Buffer& uniformBuffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) {
-		auto internalBuffer = (Buffer_DX12*)uniformBuffer.internalState.get();
+	void GraphicsDevice_DX12::bindRayTracingResource(const Resource& res, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& cmdList) {
+		auto internalResource = (Resource_DX12*)res.internalState.get();
 		auto internalPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
 
 		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
-
 		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
 			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
 			return;
 		}
 
-		internalCommandList->getGraphicsCommandList()->SetComputeRootConstantBufferView(
-			nameSearch->second,
-			internalBuffer->gpuAddress
-		);
-	}
+		// TODO: Add more cases
+		switch (res.type) {
+		case Resource::Type::BUFFER:
+			{
+				auto internalBuffer = (Buffer_DX12*)internalResource;
+				auto graphicsCmdList = internalCmdList->getGraphicsCommandList();
 
-	void GraphicsDevice_DX12::bindRayTracingStructuredBuffer(const Buffer& buffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) {
-		auto internalBuffer = (Buffer_DX12*)buffer.internalState.get();
-		auto internalPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+				if (has_flag(internalBuffer->info.bindFlags, BindFlag::UNIFORM_BUFFER)) {
+					graphicsCmdList->SetComputeRootConstantBufferView(
+						nameSearch->second,
+						internalBuffer->gpuAddress
+					);
+				}
+				else if (has_flag(internalBuffer->info.miscFlags, MiscFlag::BUFFER_STRUCTURED)) {
+					graphicsCmdList->SetComputeRootShaderResourceView(
+						nameSearch->second,
+						internalBuffer->gpuAddress
+					);
+				}
+			}
+			break;
+		case Resource::Type::RAYTRACING_AS:
+			{
+				auto internalAS = (RayTracingAS_DX12*)internalResource;
+				auto graphicsCmdList = internalCmdList->getGraphicsCommandList();
 
-		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
-
-		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
-			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
-			return;
+				graphicsCmdList->SetComputeRootShaderResourceView(
+					nameSearch->second,
+					internalAS->gpuAddress
+				);
+			}
+			break;
 		}
-
-		internalCommandList->getGraphicsCommandList()->SetComputeRootShaderResourceView(
-			nameSearch->second,
-			internalBuffer->gpuAddress
-		);
-	}
-
-	void GraphicsDevice_DX12::bindRayTracingAS(const RayTracingAS& accelerationStructure, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) {
-		auto internalAS = (RayTracingAS_DX12*)accelerationStructure.internalState.get();
-		auto internalPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
-
-		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
-
-		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
-			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
-			return;
-		}
-
-		internalCommandList->getGraphicsCommandList()->SetComputeRootShaderResourceView(
-			nameSearch->second,
-			internalAS->gpuAddress
-		);
 	}
 
 	void GraphicsDevice_DX12::createRayTracingInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) {
@@ -1607,8 +1559,8 @@ namespace sr {
 		createBuffer(instanceBufferInfo, buffer, nullptr);
 	}
 
-	void GraphicsDevice_DX12::dispatchRays(const DispatchRaysInfo& info, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::dispatchRays(const DispatchRaysInfo& info, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		D3D12_DISPATCH_RAYS_DESC dispatchRaysDesc = {};
 		dispatchRaysDesc.Width = info.width;
@@ -1642,11 +1594,11 @@ namespace sr {
 		internalCommandList->getGraphicsCommandList()->DispatchRays(&dispatchRaysDesc);
 	}
 
-	void GraphicsDevice_DX12::bindPipeline(const Pipeline& pipeline, const CommandList& commandList) {
+	void GraphicsDevice_DX12::bindPipeline(const Pipeline& pipeline, const CommandList& cmdList) {
 		auto internalPipeline = (Pipeline_DX12*)pipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
-		if (commandList.type == QueueType::DIRECT) {
+		if (cmdList.type == QueueType::DIRECT) {
 			ID3D12GraphicsCommandList* graphicsCommandList = internalCommandList->getGraphicsCommandList();
 
 			graphicsCommandList->SetPipelineState(internalPipeline->pipelineState.Get());
@@ -1655,23 +1607,17 @@ namespace sr {
 
 			auto textureHandleStart = m_ResourceDescriptorHeap.descriptorHeap->GetGPUDescriptorHandleForHeapStart();
 
-			// Bindless textures descriptor table
 			graphicsCommandList->SetGraphicsRootDescriptorTable(
-				1U,
-				textureHandleStart
-			);
-
-			graphicsCommandList->SetGraphicsRootDescriptorTable(
-				3U,
+				2U,
 				m_SamplerDescriptorHeap.descriptorHeap->GetGPUDescriptorHandleForHeapStart()
 			);
 		}
 	}
 
-	void GraphicsDevice_DX12::bindViewport(const Viewport& viewport, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::bindViewport(const Viewport& viewport, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
-		if (commandList.type == QueueType::DIRECT) {
+		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->RSSetViewports(
 				1U,
 				reinterpret_cast<const D3D12_VIEWPORT*>(&viewport)
@@ -1679,13 +1625,13 @@ namespace sr {
 		}
 	}
 
-	void GraphicsDevice_DX12::bindVertexBuffer(const Buffer& vertexBuffer, const CommandList& commandList) {
-		if (commandList.type != QueueType::DIRECT) {
+	void GraphicsDevice_DX12::bindVertexBuffer(const Buffer& vertexBuffer, const CommandList& cmdList) {
+		if (cmdList.type != QueueType::DIRECT) {
 			return;
 		}
 
 		auto internalBuffer = (Buffer_DX12*)vertexBuffer.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		const D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {
 			.BufferLocation = internalBuffer->gpuAddress,
@@ -1700,13 +1646,13 @@ namespace sr {
 		);
 	}
 
-	void GraphicsDevice_DX12::bindIndexBuffer(const Buffer& indexBuffer, const CommandList& commandList) {
-		if (commandList.type != QueueType::DIRECT) {
+	void GraphicsDevice_DX12::bindIndexBuffer(const Buffer& indexBuffer, const CommandList& cmdList) {
+		if (cmdList.type != QueueType::DIRECT) {
 			return;
 		}
 
 		auto internalBuffer = (Buffer_DX12*)indexBuffer.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		const D3D12_INDEX_BUFFER_VIEW indexBufferView = {
 			.BufferLocation = internalBuffer->gpuAddress,
@@ -1720,47 +1666,43 @@ namespace sr {
 	void GraphicsDevice_DX12::bindSampler(const Sampler& sampler) {
 	}
 
-	void GraphicsDevice_DX12::bindStructuredBuffer(const Buffer& buffer, const std::string& name, const Pipeline& pipeline, const CommandList& commandList) {
-		auto internalBuffer = (Buffer_DX12*)buffer.internalState.get();
+	void GraphicsDevice_DX12::bindResource(const Resource& res, const std::string& name, const Pipeline& pipeline, const CommandList& cmdList) {
+		auto internalResource = (Resource_DX12*)res.internalState.get();
 		auto internalPipeline = (Pipeline_DX12*)pipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
 
 		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
-
 		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
 			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
 			return;
 		}
 
-		internalCommandList->getGraphicsCommandList()->SetGraphicsRootShaderResourceView(
-			nameSearch->second,
-			internalBuffer->gpuAddress
-		);
-	}
+		// TODO: Add more cases
+		switch (res.type) {
+		case Resource::Type::BUFFER:
+			{
+				auto internalBuffer = (Buffer_DX12*)internalResource;
+				auto graphicsCommandList = internalCmdList->getGraphicsCommandList();
 
-	void GraphicsDevice_DX12::bindUniformBuffer(const Buffer& uniformBuffer, const std::string& name, const Pipeline& pipeline, const CommandList& commandList) {
-		auto internalBuffer = (Buffer_DX12*)uniformBuffer.internalState.get();
-		auto internalPipeline = (Pipeline_DX12*)pipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
-
-		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
-
-		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
-			OutputDebugStringA(std::format("BIND ERROR: Failed to find root parameter with name \"{}\"", name).c_str());
-			return;
+				if (has_flag(internalBuffer->info.bindFlags, BindFlag::UNIFORM_BUFFER)) {
+					graphicsCommandList->SetGraphicsRootConstantBufferView(
+						nameSearch->second,
+						internalBuffer->gpuAddress
+					);
+				}
+				else if (has_flag(internalBuffer->info.miscFlags, MiscFlag::BUFFER_STRUCTURED)) {
+					graphicsCommandList->SetGraphicsRootShaderResourceView(
+						nameSearch->second,
+						internalBuffer->gpuAddress
+					);
+				}
+			}
+			break;
 		}
-
-		internalCommandList->getGraphicsCommandList()->SetGraphicsRootConstantBufferView(
-			nameSearch->second,
-			internalBuffer->gpuAddress
-		);
 	}
 
-	void GraphicsDevice_DX12::bindResource(const Resource& resource, uint32_t slot, ShaderStage stages) {
-	}
-
-	void GraphicsDevice_DX12::pushConstants(const void* data, uint32_t size, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::pushConstants(const void* data, uint32_t size, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		D3D12_ROOT_PARAMETER rootParameter = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -1773,15 +1715,36 @@ namespace sr {
 		};
 
 		internalCommandList->getGraphicsCommandList()->SetGraphicsRoot32BitConstants(
-			2U,
+			1U,
 			rootParameter.Constants.Num32BitValues,
 			data,
 			0U
 		);
 	}
 
-	void GraphicsDevice_DX12::barrier(const GPUBarrier& barrier, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::pushConstantsCompute(const void* data, uint32_t size, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+
+		D3D12_ROOT_PARAMETER rootParameter = {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+			.Constants = {
+				.ShaderRegister = 0U,
+				.RegisterSpace = 0U,
+				.Num32BitValues = size >> 2
+			},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		};
+
+		internalCommandList->getGraphicsCommandList()->SetComputeRoot32BitConstants(
+			4U,
+			rootParameter.Constants.Num32BitValues,
+			data,
+			0U
+		);
+	}
+
+	void GraphicsDevice_DX12::barrier(const GPUBarrier& barrier, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		D3D12_RESOURCE_BARRIER dx12Barrier = {};
 
@@ -1824,19 +1787,19 @@ namespace sr {
 		CommandList_DX12* internalCommandList = m_CommandLists[currentCommand].get();
 		internalCommandList->type = type;
 
-		CommandList commandList = {};
-		commandList.internalState = internalCommandList;
-		commandList.type = type;
+		CommandList cmdList = {};
+		cmdList.internalState = internalCommandList;
+		cmdList.type = type;
 
 		const size_t queueIndex = (size_t)type;
 
-		if (internalCommandList->commandList == nullptr) { // create d3d12 command list if not present
+		if (internalCommandList->cmdList == nullptr) { // create d3d12 command list if not present
 			ThrowIfFailed(m_Device->CreateCommandList(
 				0,
 				convertCommandListType(type),
 				m_CommandAllocators[queueIndex][m_BufferIndex].Get(), // TODO: This is likely wrong
 				nullptr,
-				IID_PPV_ARGS(&internalCommandList->commandList)
+				IID_PPV_ARGS(&internalCommandList->cmdList)
 			));
 
 			// Graphics command lists are created in the recording state, but there is nothing to record yet so we close it
@@ -1870,16 +1833,16 @@ namespace sr {
 			internalCommandList->getGraphicsCommandList()->RSSetScissorRects(D3D12_VIEWPORT_AND_SCISSORRECT_MAX_INDEX + 1, pRects);
 		}
 
-		return commandList;
+		return cmdList;
 	}
 
-	void GraphicsDevice_DX12::beginRenderPass(const SwapChain& swapChain, const RenderPassInfo& renderPass, const CommandList& commandList, bool clearTargets) {
-		if (commandList.type != QueueType::DIRECT) {
+	void GraphicsDevice_DX12::beginRenderPass(const SwapChain& swapChain, const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets) {
+		if (cmdList.type != QueueType::DIRECT) {
 			return;
 		}
 
 		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		// Resource barrier PRESENT -> RT
 		const D3D12_RESOURCE_BARRIER rtvBarrier = {
@@ -1936,8 +1899,8 @@ namespace sr {
 		}
 	}
 
-	void GraphicsDevice_DX12::beginRenderPass(const RenderPassInfo& renderPass, const CommandList& commandList, bool clearTargets) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::beginRenderPass(const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(renderPass.numColorAttachments);
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = {};
@@ -1995,13 +1958,13 @@ namespace sr {
 		}
 	}
 
-	void GraphicsDevice_DX12::endRenderPass(const SwapChain& swapChain, const CommandList& commandList) {
-		if (commandList.type != QueueType::DIRECT) {
+	void GraphicsDevice_DX12::endRenderPass(const SwapChain& swapChain, const CommandList& cmdList) {
+		if (cmdList.type != QueueType::DIRECT) {
 			return;
 		}
 
 		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
 		// Resource barrier RT -> PRESENT
 		const D3D12_RESOURCE_BARRIER rtvBarrier = {
@@ -2028,14 +1991,14 @@ namespace sr {
 		m_CommandCounter = 0; // reset command counter
 
 		for (size_t i = 0; i < tempCommandCount; ++i) {
-			CommandList_DX12* commandList = m_CommandLists[i].get();
+			CommandList_DX12* cmdList = m_CommandLists[i].get();
 
-			if (commandList->type == QueueType::DIRECT) {
-				commandList->getGraphicsCommandList()->Close();
+			if (cmdList->type == QueueType::DIRECT) {
+				cmdList->getGraphicsCommandList()->Close();
 			}
 
-			CommandQueue& commandQueue = m_CommandQueues[(size_t)commandList->type];
-			commandQueue.submittedCommandLists.push_back(commandList->commandList.Get());
+			CommandQueue& commandQueue = m_CommandQueues[(size_t)cmdList->type];
+			commandQueue.submittedCommandLists.push_back(cmdList->cmdList.Get());
 		}
 
 		for (size_t q = 0; q < QUEUE_COUNT; ++q) {
@@ -2081,11 +2044,10 @@ namespace sr {
 
 		internalSwapChain->swapChain->Present(syncInterval, presentFlags);
 
-		static uint64_t FRAMECOUNT = 0;
-		++FRAMECOUNT;
+		++m_FrameCount;
 
 		for (size_t q = 0; q < QUEUE_COUNT; ++q) {
-			if (FRAMECOUNT > NUM_BUFFERS && m_FrameFences[m_BufferIndex][q]->GetCompletedValue() < 1) {
+			if (m_FrameCount > NUM_BUFFERS && m_FrameFences[m_BufferIndex][q]->GetCompletedValue() < 1) {
 				m_FrameFences[m_BufferIndex][q]->SetEventOnCompletion(1, nullptr);
 			}
 
@@ -2105,70 +2067,14 @@ namespace sr {
 		m_BufferIndex = (m_BufferIndex + 1) % static_cast<uint32_t>(NUM_BUFFERS);
 	}
 
-	void GraphicsDevice_DX12::beginRTRenderPass(const SwapChain& swapChain, const CommandList& commandList) {
-		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
-
-		// Resource barrier PRESENT -> RT
-		const D3D12_RESOURCE_BARRIER rtvBarrier = {
-			.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-			.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-			.Transition = {
-				.pResource = internalSwapChain->backBuffers[m_BufferIndex].Get(),
-				.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-				.StateBefore = D3D12_RESOURCE_STATE_PRESENT, // aka D3D12_RESOURCE_STATE_COMMON
-				.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET,
-			}
-		};
-
-		internalCommandList->getGraphicsCommandList()->ResourceBarrier(1, &rtvBarrier);
-
-		const D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_RTVDescriptorHeap.getDescriptorHandle(m_BufferIndex);
-
-		internalCommandList->getGraphicsCommandList()->OMSetRenderTargets(
-			1,
-			&rtvHandle,
-			FALSE,
-			nullptr
-		);
-
-		const FLOAT clearColor[] = { 1.0f, 0.0f, 0.0f, 1.0f };
-		internalCommandList->getGraphicsCommandList()->ClearRenderTargetView(
-			rtvHandle,
-			clearColor,
-			0,
-			nullptr
-		);
+	void GraphicsDevice_DX12::draw(uint32_t vertexCount, uint32_t startVertex, const CommandList& cmdList) {
+		drawInstanced(vertexCount, 1, startVertex, 0, cmdList);
 	}
 
-	void GraphicsDevice_DX12::copyRTOutputToBackbuffer(const SwapChain& swapChain, const Texture& rtOutput, const CommandList& commandList) {
-		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalRTOutput = (Texture_DX12*)rtOutput.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
-		// Copy rt
-		D3D12_RESOURCE_BARRIER preCopyBarriers[2];
-		preCopyBarriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(internalSwapChain->backBuffers[m_BufferIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST);
-		preCopyBarriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(internalRTOutput->resource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-		internalCommandList->getGraphicsCommandList()->ResourceBarrier(ARRAYSIZE(preCopyBarriers), preCopyBarriers);
-
-		internalCommandList->getGraphicsCommandList()->CopyResource(internalSwapChain->backBuffers[m_BufferIndex].Get(), internalRTOutput->resource.Get());
-
-		D3D12_RESOURCE_BARRIER postCopyBarriers[2];
-		postCopyBarriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(internalSwapChain->backBuffers[m_BufferIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT);
-		postCopyBarriers[1] = CD3DX12_RESOURCE_BARRIER::Transition(internalRTOutput->resource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-		internalCommandList->getGraphicsCommandList()->ResourceBarrier(ARRAYSIZE(postCopyBarriers), postCopyBarriers);
-	}
-
-	void GraphicsDevice_DX12::draw(uint32_t vertexCount, uint32_t startVertex, const CommandList& commandList) {
-		drawInstanced(vertexCount, 1, startVertex, 0, commandList);
-	}
-
-	void GraphicsDevice_DX12::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
-
-		if (commandList.type == QueueType::DIRECT) {
+		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->DrawInstanced(
 				vertexCount,
 				instanceCount,
@@ -2178,10 +2084,10 @@ namespace sr {
 		}
 	}
 
-	void GraphicsDevice_DX12::drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& commandList) {
-		auto internalCommandList = (CommandList_DX12*)commandList.internalState;
+	void GraphicsDevice_DX12::drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& cmdList) {
+		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
 
-		if (commandList.type == QueueType::DIRECT) {
+		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->DrawIndexedInstanced(
 				indexCount,
 				1U,
@@ -2197,6 +2103,7 @@ namespace sr {
 			auto internalTexture = (Texture_DX12*)resource.internalState.get();
 
 			switch (internalTexture->subResourceType) {
+			case SubresourceType::RTV:
 			case SubresourceType::SRV:
 				return internalTexture->srvDescriptor.index;
 			case SubresourceType::UAV:
@@ -2248,9 +2155,9 @@ namespace sr {
 			D3D12_COMMAND_LIST_TYPE_COPY,
 			command.commandAllocator.Get(),
 			nullptr,
-			IID_PPV_ARGS(&command.commandList)
+			IID_PPV_ARGS(&command.cmdList)
 		));
-		command.commandList->Close();
+		command.cmdList->Close();
 
 		ThrowIfFailed(device->m_Device->CreateFence(
 			0U,
@@ -2259,17 +2166,17 @@ namespace sr {
 		));
 
 		command.commandAllocator->Reset();
-		command.commandList->Reset(command.commandAllocator.Get(), nullptr);
+		command.cmdList->Reset(command.commandAllocator.Get(), nullptr);
 
 		return command;
 	}
 
 	void GraphicsDevice_DX12::CopyAllocator::submit(CopyCMD& command) {
-		command.commandList->Close();
+		command.cmdList->Close();
 
-		ID3D12CommandList* commandLists[] = { command.commandList.Get() };
+		ID3D12CommandList* cmdLists[] = { command.cmdList.Get() };
 		CommandQueue& commandQueue = device->m_CommandQueues[(size_t)QueueType::COPY];
-		commandQueue.commandQueue->ExecuteCommandLists(1, commandLists);
+		commandQueue.commandQueue->ExecuteCommandLists(1, cmdLists);
 
 		++command.fenceWaitForValue;
 

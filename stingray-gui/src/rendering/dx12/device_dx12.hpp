@@ -18,6 +18,7 @@ namespace sr {
 		GraphicsDevice_DX12(int width, int height, HWND window);
 		~GraphicsDevice_DX12();
 
+		/* Resource Creation */
 		void createBuffer(const BufferInfo& info, Buffer& buffer, const void* data) override;
 		void createPipeline(const PipelineInfo& info, Pipeline& pipeline) override;
 		void createSampler(const SamplerInfo& info, Sampler& sampler) override;
@@ -28,41 +29,36 @@ namespace sr {
 
 		/* Ray Tracing */
 		void createRayTracingAS(const RayTracingASInfo& info, RayTracingAS& bvh) override;
-		void buildRayTracingAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& commandList) override;
+		void buildRayTracingAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& cmdList) override;
 		void writeTLASInstance(const RayTracingTLAS::Instance& instance, void* dest) override;
 		void createRayTracingPipeline(const RayTracingPipelineInfo& info, RayTracingPipeline& rtPipeline) override;
-		void bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& commandList) override;
-		void bindRayTracingConstantBuffer(const Buffer& uniformBuffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
-		void bindRayTracingStructuredBuffer(const Buffer& buffer, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
-		void bindRayTracingAS(const RayTracingAS& accelerationStructure, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& commandList) override;
+		void bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& cmdList) override;
+		void bindRayTracingResource(const Resource& res, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& cmdList) override;
 		void createRayTracingInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) override;
-		void dispatchRays(const DispatchRaysInfo& info, const CommandList& commandList) override;
+		void dispatchRays(const DispatchRaysInfo& info, const CommandList& cmdList) override;
 
-		void bindPipeline(const Pipeline& pipeline, const CommandList& commandList) override;
-		void bindViewport(const Viewport& viewport, const CommandList& commandList) override;
-		void bindVertexBuffer(const Buffer& vertexBuffer, const CommandList& commandList) override;
-		void bindIndexBuffer(const Buffer& indexBuffer, const CommandList& commandList) override;
+		/* Resource binding */
+		void bindPipeline(const Pipeline& pipeline, const CommandList& cmdList) override;
+		void bindViewport(const Viewport& viewport, const CommandList& cmdList) override;
+		void bindVertexBuffer(const Buffer& vertexBuffer, const CommandList& cmdList) override;
+		void bindIndexBuffer(const Buffer& indexBuffer, const CommandList& cmdList) override;
 		void bindSampler(const Sampler& sampler) override;
-		void bindStructuredBuffer(const Buffer& buffer, const std::string& name, const Pipeline& pipeline, const CommandList& commandList) override;
-		void bindUniformBuffer(const Buffer& uniformBuffer, const std::string& name, const Pipeline& pipeline, const CommandList& commandList) override;
-		void bindResource(const Resource& resource, uint32_t slot, ShaderStage stages) override;
-		void pushConstants(const void* data, uint32_t size, const CommandList& commandList) override;
-		void barrier(const GPUBarrier& barrier, const CommandList& commandList) override;
+		void bindResource(const Resource& res, const std::string& name, const Pipeline& pipeline, const CommandList& cmdList) override;
+		void pushConstants(const void* data, uint32_t size, const CommandList& cmdList) override;
+		void pushConstantsCompute(const void* data, uint32_t size, const CommandList& cmdList) override;
+		void barrier(const GPUBarrier& barrier, const CommandList& cmdList) override;
 
+		/* Commands and renderpasses */
 		CommandList beginCommandList(QueueType type) override;
-		void beginRenderPass(const SwapChain& swapChain, const RenderPassInfo& renderPass, const CommandList& commandList, bool clearTargets) override;
-		void beginRenderPass(const RenderPassInfo& renderPass, const CommandList& commandList, bool clearTargets) override;
-		void endRenderPass(const SwapChain& swapChain, const CommandList& commandList) override;
+		void beginRenderPass(const SwapChain& swapChain, const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets) override;
+		void beginRenderPass(const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets) override;
+		void endRenderPass(const SwapChain& swapChain, const CommandList& cmdList) override;
 		void endRenderPass() override;
 		void submitCommandLists(SwapChain& swapChain) override;
 
-		// TODO: Temporary functions
-		void beginRTRenderPass(const SwapChain& swapChain, const CommandList& commandList) override;
-		void copyRTOutputToBackbuffer(const SwapChain& swapChain, const Texture& rtOutput, const CommandList& commandList) override;
-
-		void draw(uint32_t vertexCount, uint32_t startVertex, const CommandList& commandList) override;
-		void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& commandList) override;
-		void drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& commandList) override;
+		void draw(uint32_t vertexCount, uint32_t startVertex, const CommandList& cmdList) override;
+		void drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& cmdList) override;
+		void drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& cmdList) override;
 
 		uint32_t getDescriptorIndex(const Resource& resource) const override;
 
@@ -71,16 +67,13 @@ namespace sr {
 	private:
 		struct CommandList_DX12 {
 			QueueType type = {};
-			ComPtr<ID3D12CommandList> commandList = nullptr;
+			ComPtr<ID3D12CommandList> cmdList = nullptr;
 
-			inline ID3D12GraphicsCommandList4* getGraphicsCommandList() { return (ID3D12GraphicsCommandList4*)commandList.Get(); }
+			inline ID3D12GraphicsCommandList4* getGraphicsCommandList() { return (ID3D12GraphicsCommandList4*)cmdList.Get(); }
 		};
 
 		struct CommandQueue {
 			ComPtr<ID3D12CommandQueue> commandQueue = nullptr;
-			//ComPtr<ID3D12Fence> fence = nullptr;
-			//uint64_t fenceWaitForValue = 0;
-
 			std::vector<ID3D12CommandList*> submittedCommandLists = {};
 		};
 		
@@ -89,7 +82,7 @@ namespace sr {
 
 			struct CopyCMD {
 				ComPtr<ID3D12CommandAllocator> commandAllocator = nullptr;
-				ComPtr<ID3D12GraphicsCommandList> commandList = nullptr;
+				ComPtr<ID3D12GraphicsCommandList> cmdList = nullptr;
 				ComPtr<ID3D12Fence> fence = nullptr;
 				uint64_t fenceWaitForValue = 0;
 			};
@@ -164,7 +157,6 @@ namespace sr {
 		void createCommandAllocators(); // TODO: This shit sucks, but it works. Need to make it more dynamic
 		void createCommandQueues();
 		void createDescriptorHeaps();
-		void createRTGlobalRootSignature();
 
 		#ifdef _DEBUG
 			ComPtr<ID3D12Debug1> m_DebugController = nullptr;
@@ -183,16 +175,13 @@ namespace sr {
 		ComPtr<ID3D12Fence> m_FrameFences[NUM_BUFFERS][QUEUE_COUNT] = {};
 
 		// Descriptors
-		// TODO: These would fittingly be better off in a dedicated struct or class
 		DescriptorHeap m_RTVDescriptorHeap = {};
 		DescriptorHeap m_DSVDescriptorHeap = {};
-		DescriptorHeap m_PerFrameDescriptorHeap = {};
 		DescriptorHeap m_ResourceDescriptorHeap = {}; // NOTE: CBV_SRV_UAV bindless heap
 		DescriptorHeap m_SamplerDescriptorHeap = {};
-		ComPtr<ID3D12RootSignature> m_RTGlobalRootSignature = {};
 
 		CopyAllocator m_CopyAllocator = {};
-		uint32_t m_CommandCounter = 0U;
+		uint32_t m_CommandCounter = 0;
 		bool m_AllowTearing = false;
 	};
 }

@@ -2,7 +2,8 @@
 
 #include <chrono>
 
-#include "../rendering/renderpasses/ray_tracing_pass.hpp"
+#include "../rendering/renderpasses/gbuffer_pass.hpp"
+#include "../rendering/renderpasses/rtao_pass.hpp"
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 
 #if defined(SR_WINDOWS)
@@ -14,9 +15,8 @@
 
 namespace sr {
 
-	Application::Application(const std::string& title) : m_Title(title) {
-		m_Width = 1280;
-		m_Height = 720;
+	Application::Application(const std::string& title, int width, int height) :
+		m_Title(title), m_Width(width), m_Height(height) {
 
 		const WindowInfo windowInfo = {
 			.title = title,
@@ -77,10 +77,13 @@ namespace sr {
 	void Application::preInitialize() {
 		sr::rawinput::initialize();
 
+		const uint32_t uWidth = static_cast<uint32_t>(m_Width);
+		const uint32_t uHeight = static_cast<uint32_t>(m_Height);
+
 		// Render objects
 		const SwapChainInfo swapChainInfo = {
-			.width = static_cast<uint32_t>(m_Width),
-			.height = static_cast<uint32_t>(m_Height),
+			.width = uWidth,
+			.height = uHeight,
 			.bufferCount = 3,
 			.format = Format::R8G8B8A8_UNORM,
 			.fullscreen = false,
@@ -89,6 +92,37 @@ namespace sr {
 
 		// TODO: Only works on windows, we'll fix this later
 		m_Device->createSwapChain(swapChainInfo, m_SwapChain, (HWND)m_Window->getHandle());
+
+		// Default textures
+		const TextureInfo defaultAlbedoMapInfo = {
+			.width = 1,
+			.height = 1,
+			.format = Format::R8G8B8A8_UNORM,
+			.usage = Usage::DEFAULT,
+			.bindFlags = BindFlag::SHADER_RESOURCE
+		};
+
+		const uint32_t defaultAlbedoMapData = 0xffffffff;
+		const SubresourceData defaultAlbedoMapSubresource = {
+			.data = &defaultAlbedoMapData,
+			.rowPitch = sizeof(uint32_t)
+		};
+		m_Device->createTexture(defaultAlbedoMapInfo, m_DefaultAlbedoMap, &defaultAlbedoMapSubresource);
+
+		const TextureInfo defaultNormalMapInfo = {
+			.width = 1,
+			.height = 1,
+			.format = Format::R8G8B8A8_UNORM,
+			.usage = Usage::DEFAULT,
+			.bindFlags = BindFlag::SHADER_RESOURCE
+		};
+
+		const uint32_t defaultNormalMapData = 0xffff8080; // tangent space default normal
+		const SubresourceData defaultNormalMapSubresource = {
+			.data = &defaultNormalMapData,
+			.rowPitch = sizeof(uint32_t)
+		};
+		m_Device->createTexture(defaultNormalMapInfo, m_DefaultNormalMap, &defaultNormalMapSubresource);
 
 		// Per-frame constant buffers (one for each frame in flight)
 		const BufferInfo perFrameUBOInfo = {
@@ -108,16 +142,30 @@ namespace sr {
 		m_Device->createSampler(linearSamplerInfo, m_LinearSampler);
 
 		// Rendergraph
-		auto& rtPass = m_RenderGraph->addPass("RTPass");
-		rtPass.addOutputAttachment("RTOutput", { AttachmentType::RW_TEXTURE, (uint32_t)m_Width, (uint32_t)m_Height, 1, Format::R8G8B8A8_UNORM });
-		rtPass.setExecuteCallback([&](RenderGraph& graph, GraphicsDevice& device, const CommandList& commandList) {
-			sr::rtpass::onExecute(graph, device, commandList, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		auto& gBufferPass = m_RenderGraph->addPass("GBufferPass");
+		gBufferPass.addOutputAttachment("Position", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R16G16B16A16_FLOAT });
+		gBufferPass.addOutputAttachment("Albedo", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
+		gBufferPass.addOutputAttachment("Normal", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R16G16B16A16_FLOAT });
+		gBufferPass.addOutputAttachment("Depth", { AttachmentType::DEPTH_STENCIL, uWidth, uHeight, 1, Format::D32_FLOAT });
+		gBufferPass.setExecuteCallback([&](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
+			sr::gbufferpass::onExecute(graph, device, cmdList, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		});
+
+		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
+		rtaoPass.addInputAttachment("Position");
+		rtaoPass.addInputAttachment("Normal");
+		rtaoPass.addOutputAttachment("AmbientOcclusion", { AttachmentType::RW_TEXTURE, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
+		rtaoPass.setExecuteCallback([&](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
+			sr::rtaopass::onExecute(graph, device, cmdList, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
 		});
 
 		auto& fullscreenTriPass = m_RenderGraph->addPass("FullscreenTriPass");
-		fullscreenTriPass.addInputAttachment("RTOutput");
-		fullscreenTriPass.setExecuteCallback([](RenderGraph& graph, GraphicsDevice& device, const CommandList& commandList) {
-			sr::fstripass::onExecute(graph, device, commandList);
+		fullscreenTriPass.addInputAttachment("Position");
+		fullscreenTriPass.addInputAttachment("Albedo");
+		fullscreenTriPass.addInputAttachment("Normal");
+		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
+		fullscreenTriPass.setExecuteCallback([](RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
+			sr::fstripass::onExecute(graph, device, cmdList);
 		});
 
 		m_RenderGraph->build();
@@ -127,39 +175,43 @@ namespace sr {
 	}
 
 	void Application::createEntities() {
-		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/SheenCloth.gltf", *m_Device);
+		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/sphere.gltf", *m_Device);
 		m_PlaneModel = sr::assetmanager::loadFromFile("assets/models/plane.gltf", *m_Device);
+		m_StatueModel = sr::assetmanager::loadFromFile("assets/models/statue.gltf", *m_Device);
 
 		// Cornell box
-		const float cornellScale = 4.0f;
+		const float cornellScale = 5.0f;
 
 		auto cornellFloor = addEntity("Floor");
+		cornellFloor->position.y = -1.99f;
 		cornellFloor->scale = glm::vec3(cornellScale);
 		cornellFloor->model = &m_PlaneModel.getModel();
+		cornellFloor->color = { 0.5f, 0.5f, 0.54f, 1.0f };
 
-		auto cornellTop = addEntity("Top");
-		cornellTop->position.y = 2 * cornellScale;
-		cornellTop->scale = glm::vec3(cornellScale);
-		cornellTop->model = &m_PlaneModel.getModel();
+		//auto cornellTop = addEntity("Top");
+		//cornellTop->position.y = 2 * cornellScale;
+		//cornellTop->scale = glm::vec3(cornellScale);
+		//cornellTop->model = &m_PlaneModel.getModel();
+		//cornellTop->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(180.0f));
 
 		auto cornellWallLeft = addEntity("WallLeft");
-		cornellWallLeft->position.x = -cornellScale;
-		cornellWallLeft->position.y = cornellScale;
+		cornellWallLeft->position.x = -cornellScale + 0.01f;
+		cornellWallLeft->position.y = cornellScale - 2.0f;
 		cornellWallLeft->scale = glm::vec3(cornellScale);
 		cornellWallLeft->model = &m_PlaneModel.getModel();
 		cornellWallLeft->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
 		cornellWallLeft->color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-		auto cornellWallRight = addEntity("WallRight");
-		cornellWallRight->position.x = cornellScale;
-		cornellWallRight->position.y = cornellScale;
-		cornellWallRight->scale = glm::vec3(cornellScale);
-		cornellWallRight->model = &m_PlaneModel.getModel();
-		cornellWallRight->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
-		cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
+		//auto cornellWallRight = addEntity("WallRight");
+		//cornellWallRight->position.x = cornellScale;
+		//cornellWallRight->position.y = cornellScale;
+		//cornellWallRight->scale = glm::vec3(cornellScale);
+		//cornellWallRight->model = &m_PlaneModel.getModel();
+		//cornellWallRight->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(90.0f));
+		//cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
 
 		auto cornellWallBack = addEntity("WallBack");
-		cornellWallBack->position.y = cornellScale;
+		cornellWallBack->position.y = cornellScale - 2.0f;
 		cornellWallBack->position.z = cornellScale;
 		cornellWallBack->scale = glm::vec3(cornellScale);
 		cornellWallBack->model = &m_PlaneModel.getModel();
@@ -167,8 +219,14 @@ namespace sr {
 
 		m_SphereEntity = addEntity("Sphere");
 		m_SphereEntity->position.y = 0;
-		m_SphereEntity->scale = glm::vec3(50.0f);
 		m_SphereEntity->model = &m_CubeModel.getModel();
+
+		auto statue = addEntity("Statue");
+		statue->position = { 2.0f, -2.0f, 1.0f };
+		statue->scale = glm::vec3(3.0f);
+		statue->model = &m_StatueModel.getModel();
+		statue->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
+		statue->orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(90.0f)) * statue->orientation;
 	}
 
 	void Application::update(float dt) {
@@ -218,20 +276,22 @@ namespace sr {
 		float aspectRatio = (float)m_Width / m_Height;
 		glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
 
+		m_PerFrameUBOData.projectionMatrix = proj;
+		m_PerFrameUBOData.viewMatrix = m_Camera.viewMatrix;
 		m_PerFrameUBOData.invViewProjection = glm::inverse(proj * m_Camera.viewMatrix);
 		std::memcpy(m_PerFrameUBOs[m_Device->getBufferIndex()].mappedData, &m_PerFrameUBOData, sizeof(m_PerFrameUBOData));
 	}
 
 	void Application::render(float dt) {
-		CommandList commandList = m_Device->beginCommandList(QueueType::DIRECT);
+		CommandList cmdList = m_Device->beginCommandList(QueueType::DIRECT);
 		{
 			const Viewport viewport = {
 				.width = static_cast<float>(m_Width),
 				.height = static_cast<float>(m_Height),
 			};
-			m_Device->bindViewport(viewport, commandList);
+			m_Device->bindViewport(viewport, cmdList);
 
-			m_RenderGraph->execute(m_SwapChain, commandList);
+			m_RenderGraph->execute(m_SwapChain, cmdList);
 		}
 		m_Device->submitCommandLists(m_SwapChain);
 	}

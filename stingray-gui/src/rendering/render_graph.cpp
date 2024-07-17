@@ -37,9 +37,9 @@ namespace sr {
 		return *attachment;
 	}
 
-	void RenderPass::execute(GraphicsDevice& device, const CommandList& commandList) {
+	void RenderPass::execute(GraphicsDevice& device, const CommandList& cmdList) {
 		if (m_ExecuteCallback) {
-			m_ExecuteCallback(m_Graph, device, commandList);
+			m_ExecuteCallback(m_Graph, device, cmdList);
 		}
 	}
 
@@ -66,7 +66,7 @@ namespace sr {
 		recurseBuild(m_Passes.size() - 1);
 	}
 
-	void RenderGraph::execute(SwapChain& swapChain, const CommandList& commandList) {
+	void RenderGraph::execute(SwapChain& swapChain, const CommandList& cmdList) {
 		bool clearTargets = true;
 		bool encounteredFirstRootPass = false;
 
@@ -122,7 +122,7 @@ namespace sr {
 				if (attachment->currentState != targetState) {
 					m_Device.barrier(
 						GPUBarrier::imageBarrier(&attachment->texture, attachment->currentState, targetState),
-						commandList
+						cmdList
 					);
 					attachment->currentState = targetState;
 				}
@@ -136,20 +136,20 @@ namespace sr {
 				if (attachment->currentState != targetState) {
 					m_Device.barrier(
 						GPUBarrier::imageBarrier(&attachment->texture, attachment->currentState, targetState),
-						commandList
+						cmdList
 					);
 					attachment->currentState = targetState;
 				}
 			}
 
 			if (isRootPass) {
-				m_Device.beginRenderPass(swapChain, passInfo, commandList, clearTargets);
-				pass.execute(m_Device, commandList);
-				m_Device.endRenderPass(swapChain, commandList);
+				m_Device.beginRenderPass(swapChain, passInfo, cmdList, clearTargets);
+				pass.execute(m_Device, cmdList);
+				m_Device.endRenderPass(swapChain, cmdList);
 			}
 			else {
-				m_Device.beginRenderPass(passInfo, commandList, clearTargets);
-				pass.execute(m_Device, commandList);
+				m_Device.beginRenderPass(passInfo, cmdList, clearTargets);
+				pass.execute(m_Device, cmdList);
 				m_Device.endRenderPass();
 			}
 		}

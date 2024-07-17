@@ -14,11 +14,6 @@
 using namespace Microsoft::WRL;
 
 namespace sr {
-	//struct BVH_DX12 {
-	//	RayTracingASType type = {};
-	//	std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries = {};
-	//};
-
 	struct Pipeline_DX12 {
 		PipelineInfo info = {};
 		ComPtr<ID3D12PipelineState> pipelineState = nullptr;

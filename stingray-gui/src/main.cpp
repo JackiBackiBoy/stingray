@@ -1,12 +1,10 @@
-#include <iostream>
-
 #include "core/application.hpp"
 
 using namespace sr;
 
 class Sandbox final : public Application {
 public:
-    Sandbox() : Application("Sandbox") {}
+    Sandbox() : Application("Sandbox (DX12)", 1920, 1080) {}
     ~Sandbox() {}
 
     void onInitialize() override {
@@ -22,9 +20,9 @@ private:
 
 int main() {
     Sandbox* sandbox = new Sandbox();
-
     sandbox->run();
 
     delete sandbox;
+    sandbox = nullptr;
     return 0;
 }

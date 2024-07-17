@@ -299,6 +299,7 @@ namespace sr {
 			UNKNOWN,
 			BUFFER,
 			TEXTURE,
+			RAYTRACING_AS
 		} type = Type::UNKNOWN;
 
 		void* mappedData = nullptr; // NOTE: Only valid for Usage::UPLOAD

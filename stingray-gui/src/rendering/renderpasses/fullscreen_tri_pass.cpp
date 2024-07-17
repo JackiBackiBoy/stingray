@@ -4,7 +4,10 @@ namespace sr::fstripass {
 	static bool g_Initialized = false;
 
 	struct PushConstant {
-		uint32_t renderTargetIndex;
+		uint32_t gBufferPositionIndex;
+		uint32_t gBufferAlbedoIndex;
+		uint32_t gBufferNormalIndex;
+		uint32_t aoIndex;
 	};
 
 	static Shader g_VertexShader = {};
@@ -25,19 +28,30 @@ namespace sr::fstripass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	void onExecute(RenderGraph& graph, GraphicsDevice& device, const CommandList& commandList) {
+	void onExecute(RenderGraph& graph, GraphicsDevice& device, const CommandList& cmdList) {
 		if (!g_Initialized) {
 			initialize(device);
 			g_Initialized = true;
 		}
 
-		auto rtOutputAttachment = graph.getAttachment("RTOutput");
-		PushConstant pushConstant = { device.getDescriptorIndex(rtOutputAttachment->texture) };
+		//auto rtOutputAttachment = graph.getAttachment("RTOutput");
+		//PushConstant pushConstant = { device.getDescriptorIndex(rtOutputAttachment->texture) };
+		auto positionAttachment = graph.getAttachment("Position");
+		auto albedoAttachment = graph.getAttachment("Albedo");
+		auto normalAttachment = graph.getAttachment("Normal");
+		auto aoAttachment = graph.getAttachment("AmbientOcclusion");
 
-		device.bindPipeline(g_Pipeline, commandList);
+		const PushConstant pushConstant = {
+			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
+			.gBufferAlbedoIndex = device.getDescriptorIndex(albedoAttachment->texture),
+			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
+			.aoIndex = device.getDescriptorIndex(aoAttachment->texture)
+		};
 
-		device.pushConstants(&pushConstant, sizeof(pushConstant), commandList);
-		device.draw(3, 0, commandList);
+		device.bindPipeline(g_Pipeline, cmdList);
+
+		device.pushConstants(&pushConstant, sizeof(pushConstant), cmdList);
+		device.draw(3, 0, cmdList);
 	}
 
 }
