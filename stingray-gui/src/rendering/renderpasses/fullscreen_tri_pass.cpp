@@ -1,8 +1,6 @@
 #include "fullscreen_tri_pass.hpp"
 
 namespace sr::fstripass {
-	static bool g_Initialized = false;
-
 	struct PushConstant {
 		uint32_t gBufferPositionIndex;
 		uint32_t gBufferAlbedoIndex;
@@ -13,6 +11,7 @@ namespace sr::fstripass {
 	static Shader g_VertexShader = {};
 	static Shader g_PixelShader = {};
 	static Pipeline g_Pipeline = {};
+	static bool g_Initialized = false;
 
 	static void initialize(GraphicsDevice& device) {
 		device.createShader(ShaderStage::VERTEX, L"assets/shaders/fullscreen_tri.vs.hlsl", g_VertexShader);

@@ -21,23 +21,23 @@ namespace sr::rtaopass {
 		uint32_t frameCount;
 	};
 
-	bool g_Initialized = false;
-	Shader g_RayTracingShaderLibrary = {};
-	Buffer g_RayGenShaderTable = {};
-	Buffer g_MissShaderTable = {};
-	Buffer g_HitShaderTable = {};
-	Buffer g_InstanceBuffer = {};
+	static Shader g_RayTracingShaderLibrary = {};
+	static Buffer g_RayGenShaderTable = {};
+	static Buffer g_MissShaderTable = {};
+	static Buffer g_HitShaderTable = {};
+	static Buffer g_InstanceBuffer = {};
 
-	Buffer g_GeometryInfoBuffer = {};
-	std::vector<GeometryInfo> g_GeometryInfoData = {};
-	Buffer g_MaterialInfoBuffer = {};
-	std::vector<MaterialInfo> g_MaterialInfoData = {};
+	static Buffer g_GeometryInfoBuffer = {};
+	static std::vector<GeometryInfo> g_GeometryInfoData = {};
+	static Buffer g_MaterialInfoBuffer = {};
+	static std::vector<MaterialInfo> g_MaterialInfoData = {};
 
-	std::vector<std::unique_ptr<RayTracingAS>> g_RayTracingBLASes = {};
-	RayTracingAS g_RayTracingTLAS = {};
-	RayTracingPipeline g_RayTracingPipeline = {};
+	static std::vector<std::unique_ptr<RayTracingAS>> g_RayTracingBLASes = {};
+	static RayTracingAS g_RayTracingTLAS = {};
+	static RayTracingPipeline g_RayTracingPipeline = {};
+	static bool g_Initialized = false;
 
-	void createBLASes(GraphicsDevice& device, const std::vector<Entity*>& entities) {
+	static void createBLASes(GraphicsDevice& device, const std::vector<Entity*>& entities) {
 		for (auto& entity : entities) {
 			// TODO: Add loop for sub-meshes per model
 			g_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
@@ -63,7 +63,7 @@ namespace sr::rtaopass {
 		}
 	}
 
-	void createTLAS(GraphicsDevice& device) {
+	static void createTLAS(GraphicsDevice& device) {
 		const RayTracingASInfo rtTLASInfo = {
 			.type = RayTracingASType::TLAS,
 			.tlas = {
@@ -75,7 +75,7 @@ namespace sr::rtaopass {
 		device.createRayTracingAS(rtTLASInfo, g_RayTracingTLAS);
 	}
 
-	void writeTLASInstances(GraphicsDevice& device, const std::vector<Entity*>& entities) {
+	static void writeTLASInstances(GraphicsDevice& device, const std::vector<Entity*>& entities) {
 		for (uint32_t i = 0; i < g_RayTracingBLASes.size(); ++i) {
 			RayTracingTLAS::Instance instance = {
 				.instanceID = i,
@@ -98,7 +98,7 @@ namespace sr::rtaopass {
 		}
 	}
 
-	void initialize(GraphicsDevice& device, const std::vector<Entity*>& entities) {
+	static void initialize(GraphicsDevice& device, const std::vector<Entity*>& entities) {
 		createBLASes(device, entities);
 
 		// Create ray tracing instance buffer
@@ -213,7 +213,7 @@ namespace sr::rtaopass {
 		const PushConstant pushConstant = {
 			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
 			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
-			.frameCount = (uint32_t)device.getFrameCount() % 1024
+			.frameCount = (uint32_t)device.getFrameCount() % 32000
 		};
 
 		device.pushConstantsCompute(&pushConstant, sizeof(pushConstant), cmdList);

@@ -9,7 +9,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Compiler-specific options
-
+add_subdirectory(vendor/freetype)
 add_subdirectory(stingray-cli)
 add_subdirectory(stingray-gui)

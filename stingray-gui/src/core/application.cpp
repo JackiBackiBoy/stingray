@@ -6,6 +6,7 @@
 #include "../rendering/renderpasses/gbuffer_pass.hpp"
 #include "../rendering/renderpasses/rtao_pass.hpp"
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
+#include "../rendering/renderpasses/ui_pass.hpp"
 
 #if defined(SR_WINDOWS)
 	#include "../rendering/dx12/device_dx12.hpp"
@@ -60,6 +61,8 @@ namespace sr {
 			else {
 				m_FrameInfo.dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
 				m_FrameInfo.cameraMoved = false;
+				m_FrameInfo.width = static_cast<uint32_t>(m_Width);
+				m_FrameInfo.height = static_cast<uint32_t>(m_Height);
 				lastTime = currentTime;
 
 				update(m_FrameInfo);
@@ -193,6 +196,11 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
 		fullscreenTriPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
 			sr::fstripass::onExecute(executeInfo);
+		});
+
+		auto& uiPass = m_RenderGraph->addPass("UIPass");
+		uiPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
+			sr::uipass::onExecute(executeInfo);
 		});
 
 		m_RenderGraph->build();

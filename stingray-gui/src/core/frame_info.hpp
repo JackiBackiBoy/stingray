@@ -14,6 +14,8 @@ namespace sr {
 	struct FrameInfo {
 		Camera camera = {};
 		bool cameraMoved = false;
+		uint32_t width = 0;
+		uint32_t height = 0;
 		float dt = 0.0f;
 	};
 }

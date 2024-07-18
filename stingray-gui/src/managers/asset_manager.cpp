@@ -6,7 +6,7 @@
 #include "../utility/stb_image.h"
 #include "../utility/tiny_gltf.h"
 
-//#include <Windows.h> // temp
+#include <Windows.h>
 
 namespace sr {
 	enum class DataType {
@@ -17,8 +17,8 @@ namespace sr {
 	};
 
 	struct AssetInternal {
-		Texture texture{};
-		Model model{};
+		Model model = {};
+		Texture texture = {};
 
 		std::vector<uint8_t> data{};
 	};
@@ -287,6 +287,7 @@ namespace sr {
 			return Asset();
 		}
 	}
+
 	Model& Asset::getModel() const {
 		AssetInternal* assetInternal = (AssetInternal*)internalState.get();
 		return assetInternal->model;

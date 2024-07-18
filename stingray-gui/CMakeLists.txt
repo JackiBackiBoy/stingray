@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.1.0)
 
 project(stingray-gui LANGUAGES CXX)
 
+# Dependency paths
+set(FREETYPE_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/freetype/include/)
+
 # Settings
 set(DCMAKE_GENERATOR_PLATFORM "x64")
 set(CMAKE_CXX_STANDARD 20)
@@ -44,6 +47,8 @@ set(SOURCE_FILES
 
     # Data
     ${SOURCE_DIR}/data/entity.hpp
+    ${SOURCE_DIR}/data/font.cpp
+    ${SOURCE_DIR}/data/font.hpp
     ${SOURCE_DIR}/data/model.hpp
     
     # Input
@@ -121,11 +126,13 @@ if (WIN32)
     target_include_directories(stingray-gui PRIVATE
         ${DXC_INCLUDE_DIR}
         ${GLM_INCLUDE_DIR}
+        ${FREETYPE_INCLUDE_DIR}
     )
 
     target_link_libraries(stingray-gui PUBLIC
         D3D12
         DXGI
+        freetype
     )
 elseif(APPLE)
 

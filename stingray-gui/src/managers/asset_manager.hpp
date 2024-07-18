@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../data/font.hpp"
 #include "../data/model.hpp"
 #include "../rendering/device.hpp"
 

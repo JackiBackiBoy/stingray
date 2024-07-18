@@ -17,7 +17,7 @@ namespace sr::gbufferpass {
 	static PushConstant g_PushConstant = {};
 	static bool g_Initialized = false;
 
-	void initialize(GraphicsDevice& device) {
+	static void initialize(GraphicsDevice& device) {
 		device.createShader(ShaderStage::VERTEX, L"assets/shaders/gbuffer.vs.hlsl", g_VertexShader);
 		device.createShader(ShaderStage::PIXEL, L"assets/shaders/gbuffer.ps.hlsl", g_PixelShader);
 
