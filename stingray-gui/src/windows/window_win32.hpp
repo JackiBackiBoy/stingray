@@ -23,10 +23,14 @@ namespace sr {
 	private:
 		static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
+		WindowInfo m_WindowInfo = {};
 		HWND m_Handle = nullptr;
 		RECT m_ClientRect = {};
 		RECT m_WindowRect = {};
 		bool m_ShouldClose = false;
+
+		int m_SizingBorder = 8;
+		int m_TitlebarHeight = 30;
 	};
 
 	typedef WindowWin32 Window;

@@ -968,17 +968,17 @@ namespace sr {
 					IID_PPV_ARGS(&internalState->resource)
 				));
 
-				uint64_t textureMemorySize = 0; // totally memory needed
-				const UINT numFootprints = info.arraySize * std::max(1U, info.mipLevels);
+				UINT64 textureMemorySize = 0;
+				UINT numFootprints = info.arraySize * std::max(1U, info.mipLevels);
 				std::vector<UINT> numRows(numFootprints);
 				std::vector<UINT64> rowSizesInBytes(numFootprints);
 				std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> footprints(numFootprints);
 
 				m_Device->GetCopyableFootprints(
 					&resourceDesc,
-					0U,
+					0,
 					numFootprints,
-					0U,
+					0,
 					footprints.data(),
 					numRows.data(),
 					rowSizesInBytes.data(),
@@ -990,41 +990,51 @@ namespace sr {
 					.size = textureMemorySize,
 					.stride = 0, // doesn't matter
 					.usage = Usage::UPLOAD,
-					.persistentMap = false
+					.persistentMap = true
 				};
 
 				Buffer stagingBuffer = {};
-				createBuffer(stagingBufferInfo, stagingBuffer, data->data);
+				createBuffer(stagingBufferInfo, stagingBuffer, nullptr);
 				auto internalStagingBuffer = (Buffer_DX12*)stagingBuffer.internalState.get();
-
-				const D3D12_SUBRESOURCE_DATA subResourceData = {
-					.pData = data->data,
-					.RowPitch = data->rowPitch,
-					.SlicePitch = data->slicePitch
-				};
-
-				const D3D12_TEXTURE_COPY_LOCATION dst = {
-					.pResource = internalState->resource.Get(),
-					.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-					.SubresourceIndex = 0U
-				};
-
-				const D3D12_TEXTURE_COPY_LOCATION src = {
-					.pResource = internalStagingBuffer->resource.Get(),
-					.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-					.PlacedFootprint = footprints[0], // TODO: If we ever want a ring buffer, we will have to also change the offset
-				};
 
 				CopyAllocator::CopyCMD copyCommand = m_CopyAllocator.allocate(0);
 
-				copyCommand.cmdList->CopyTextureRegion(
-					&dst,
-					0U,
-					0U,
-					0U,
-					&src,
-					nullptr
-				);
+				for (size_t i = 0; i < footprints.size(); ++i) {
+					const D3D12_SUBRESOURCE_DATA subResourceData = {
+						.pData = data->data,
+						.RowPitch = data->rowPitch,
+						.SlicePitch = data->slicePitch
+					};
+
+					const D3D12_MEMCPY_DEST destData = {
+						.pData = (void*)((UINT64)stagingBuffer.mappedData + footprints[i].Offset),
+						.RowPitch = (SIZE_T)footprints[i].Footprint.RowPitch,
+						.SlicePitch = (SIZE_T)footprints[i].Footprint.RowPitch * (SIZE_T)numRows[i]
+					};
+
+					MemcpySubresource(&destData, &subResourceData, rowSizesInBytes[i], numRows[i], footprints[i].Footprint.Depth);
+
+					const D3D12_TEXTURE_COPY_LOCATION dst = {
+						.pResource = internalState->resource.Get(),
+						.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+						.SubresourceIndex = static_cast<UINT>(i)
+					};
+
+					const D3D12_TEXTURE_COPY_LOCATION src = {
+						.pResource = internalStagingBuffer->resource.Get(),
+						.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+						.PlacedFootprint = footprints[i], // TODO: If we ever want a ring buffer, we will have to also change the offset
+					};
+
+					copyCommand.cmdList->CopyTextureRegion(
+						&dst,
+						0U,
+						0U,
+						0U,
+						&src,
+						nullptr
+					);
+				}
 
 				m_CopyAllocator.submit(copyCommand);
 			}

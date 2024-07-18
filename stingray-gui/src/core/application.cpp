@@ -24,7 +24,7 @@ namespace sr {
 			.title = title,
 			.width = m_Width,
 			.height = m_Height,
-			.flags = WindowFlag::HCENTER | WindowFlag::VCENTER | WindowFlag::SIZE_IS_CLIENT_AREA
+			.flags = WindowFlag::HCENTER | WindowFlag::VCENTER | WindowFlag::SIZE_IS_CLIENT_AREA | WindowFlag::NO_TITLEBAR
 		};
 
 		m_Window = std::make_unique<Window>(windowInfo);

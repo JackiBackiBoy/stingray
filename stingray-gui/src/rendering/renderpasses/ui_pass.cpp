@@ -1,16 +1,29 @@
 #include "ui_pass.hpp"
 
 #include "../../data/font.hpp"
+#include "../../managers/asset_manager.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace sr::uipass {
 	static constexpr uint32_t MAX_TEXT_PARAMS = 8192;
+	static constexpr uint32_t MAX_UI_PARAMS = 8192;
 
 	struct TextParams {
 		glm::vec4 color = {};
 		glm::vec2 position = {};
 		glm::vec2 size = {};
 		glm::vec2 texCoords[4] = {};
+	};
+
+	struct UIParams {
+		glm::vec4 color = {};
+		glm::vec2 position = {};
+		glm::vec2 size = {};
+		glm::vec2 texCoords[4] = {};
+		uint32_t texIndex = 0;
+		uint32_t pad1;
+		uint32_t pad2;
+		uint32_t pad3;
 	};
 
 	struct TextPushConstant {
@@ -21,6 +34,10 @@ namespace sr::uipass {
 		uint32_t pad3;
 	};
 
+	struct UIPushConstant {
+		glm::mat4 uiProjection = { 1.0f };
+	};
+
 	static Shader g_TextVertexShader = {};
 	static Shader g_TextPixelShader = {};
 	static BlendState g_TextBlendState = {};
@@ -29,22 +46,26 @@ namespace sr::uipass {
 	static Buffer g_TextParamsBuffers[GraphicsDevice::NUM_BUFFERS] = {};
 	static std::vector<TextParams> g_TextParamsData = {};
 
-	static glm::vec2 g_DefaultCursorOrigin = { 8, 8 };
+	static Shader g_UIVertexShader = {};
+	static Shader g_UIPixelShader = {};
+	static BlendState g_UIBlendState = {};
+	static Pipeline g_UIPipeline = {};
+	static UIPushConstant g_UIPushConstant = {};
+	static Buffer g_UIParamsBuffers[GraphicsDevice::NUM_BUFFERS] = {};
+	static std::vector<UIParams> g_UIParamsData = {};
+
+	static Asset g_MinimizeIcon = {};
+	static Asset g_MaximizeIcon = {};
+	static Asset g_CloseIcon = {};
+	static Font g_DefaultFont = {};
+
+	static glm::vec2 g_DefaultCursorOrigin = { 0, 0 };
 	static glm::vec2 g_CursorOriginReturn = g_DefaultCursorOrigin; // NOTE: Used when 'sameLine' function is used
 	static glm::vec2 g_CursorOrigin = g_DefaultCursorOrigin;
-	static glm::vec2 g_CursorOriginStep = { 0, 0 };
 	static bool g_SameLineActive = false;
-	static Font g_DefaultFont = {};
 	static bool g_Initialized = false;
 
 	void drawText(const std::string& text, const glm::vec4 color, const Font& font, UIPosFlag posFlags = UIPosFlag::NONE) {
-		if (g_SameLineActive) {
-			g_CursorOrigin.x += g_CursorOriginStep.x;
-		}
-		else {
-			g_CursorOrigin.y += g_CursorOriginStep.y;
-		}
-
 		float textPosX = g_CursorOrigin.x;
 		float textPosY = g_CursorOrigin.y;
 
@@ -79,14 +100,32 @@ namespace sr::uipass {
 
 			textPosX += glyphData.advanceX;
 		}
+	}
 
-		g_CursorOriginStep.x = textPosX - g_CursorOrigin.x + font.glyphs[text[text.length() - 1]].advanceX;
-		g_CursorOriginStep.y = textPosY - g_CursorOrigin.y + font.lineSpacing;
+	void drawRect(GraphicsDevice& device, glm::vec4 color, int width, int height, const Texture* texture) {
+		UIParams uiParams = {};
+		uiParams.color = color;
+		uiParams.position.x = g_CursorOrigin.x;
+		uiParams.position.y = g_CursorOrigin.y;
+		uiParams.size = { width, height };
+
+		if (texture != nullptr) {
+			uiParams.texIndex = device.getDescriptorIndex(*texture);
+		}
+
+		// I have no fucking idea what this order is, but if it works, it works
+		uiParams.texCoords[0] = { 0.0f, 0.0f };
+		uiParams.texCoords[1] = { 1.0f, 0.0f };
+		uiParams.texCoords[2] = { 1.0f, 1.0f };
+		uiParams.texCoords[3] = { 0.0f, 1.0f };
+
+		g_UIParamsData.push_back(uiParams);
 	}
 
 	static void initialize(GraphicsDevice& device) {
-		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 16, g_DefaultFont, device);
+		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 14, g_DefaultFont, device);
 
+		// Text pipeline
 		device.createShader(ShaderStage::VERTEX, L"assets/shaders/text.vs.hlsl", g_TextVertexShader);
 		device.createShader(ShaderStage::PIXEL, L"assets/shaders/text.ps.hlsl", g_TextPixelShader);
 
@@ -116,6 +155,42 @@ namespace sr::uipass {
 		for (size_t i = 0; i < GraphicsDevice::NUM_BUFFERS; ++i) {
 			device.createBuffer(textParamsInfo, g_TextParamsBuffers[i], nullptr);
 		}
+
+		// General UI pipeline
+		device.createShader(ShaderStage::VERTEX, L"assets/shaders/ui.vs.hlsl", g_UIVertexShader);
+		device.createShader(ShaderStage::PIXEL, L"assets/shaders/ui.ps.hlsl", g_UIPixelShader);
+
+		g_UIBlendState.alphaToCoverage = false;
+		g_UIBlendState.independentBlend = false;
+		g_UIBlendState.renderTargetBlendStates[0].blendEnable = true;
+
+		const PipelineInfo uiPipelineInfo = {
+			.vertexShader = &g_UIVertexShader,
+			.fragmentShader = &g_UIPixelShader,
+			.blendState = &g_UIBlendState,
+			.numRenderTargets = 1,
+			.renderTargetFormats = { Format::R8G8B8A8_UNORM },
+		};
+
+		device.createPipeline(uiPipelineInfo, g_UIPipeline);
+
+		const BufferInfo uiParamsInfo = {
+			.size = MAX_UI_PARAMS * sizeof(UIParams),
+			.stride = sizeof(UIParams),
+			.usage = Usage::UPLOAD,
+			.bindFlags = BindFlag::SHADER_RESOURCE,
+			.miscFlags = MiscFlag::BUFFER_STRUCTURED,
+			.persistentMap = true
+		};
+
+		for (size_t i = 0; i < GraphicsDevice::NUM_BUFFERS; ++i) {
+			device.createBuffer(uiParamsInfo, g_UIParamsBuffers[i], nullptr);
+		}
+
+		// Textures
+		g_MinimizeIcon = sr::assetmanager::loadFromFile("assets/icons/minimize.png", device);
+		g_MaximizeIcon = sr::assetmanager::loadFromFile("assets/icons/maximize.png", device);
+		g_CloseIcon = sr::assetmanager::loadFromFile("assets/icons/close.png", device);
 	}
 
 	void onExecute(PassExecuteInfo& executeInfo) {
@@ -131,15 +206,37 @@ namespace sr::uipass {
 		float fWidth = static_cast<float>(frameInfo.width);
 		float fHeight = static_cast<float>(frameInfo.height);
 
-		g_CursorOrigin.x = fWidth / 2;
-		drawText("Stingray (DX12) - Demo Scene", { 0.0f, 0.0f, 0.0f, 1.0f }, g_DefaultFont, UIPosFlag::HCENTER);
+		// Draw titlebar
+		const int sysMenuWidth = 44 * 3;
+		g_CursorOrigin = { 0, 0 };
+		drawRect(device, { 0.2f, 0.2f, 0.2f, 0.9f }, fWidth, 31, nullptr);
+
+		g_CursorOrigin = { fWidth - sysMenuWidth, 0 };
+		drawRect(device, { 1.0f, 1.0f, 1.0f, 1.0f }, 44, 31, &g_MinimizeIcon.getTexture());
+		g_CursorOrigin = { fWidth - sysMenuWidth + 44, 0 };
+		drawRect(device, { 1.0f, 1.0f, 1.0f, 1.0f }, 44, 31, &g_MaximizeIcon.getTexture());
+		g_CursorOrigin = { fWidth - sysMenuWidth + 88, 0 };
+		drawRect(device, { 1.0f, 1.0f, 1.0f, 1.0f }, 44, 31, &g_CloseIcon.getTexture());
+
+		g_CursorOrigin = { fWidth / 2, 8 };
+		drawText("Stingray", { 1.0f, 1.0f, 1.0f, 1.0f }, g_DefaultFont, UIPosFlag::HCENTER);
 
 		g_TextPushConstant.uiProjection = glm::ortho(0.0f, fWidth, fHeight, 0.0f);
 		g_TextPushConstant.texIndex = device.getDescriptorIndex(g_DefaultFont.fontAtlasTexture);
+		g_UIPushConstant.uiProjection = g_TextPushConstant.uiProjection;
 
 		// Update structured buffers for text and UI
 		std::memcpy(g_TextParamsBuffers[device.getBufferIndex()].mappedData, g_TextParamsData.data(), g_TextParamsData.size() * sizeof(TextParams));
+		std::memcpy(g_UIParamsBuffers[device.getBufferIndex()].mappedData, g_UIParamsData.data(), g_UIParamsData.size() * sizeof(UIParams));
 
+		// UI pipeline
+		device.bindPipeline(g_UIPipeline, cmdList);
+		device.bindResource(g_UIParamsBuffers[device.getBufferIndex()], "g_UIParamsBuffer", g_UIPipeline, cmdList);
+
+		device.pushConstants(&g_UIPushConstant, sizeof(g_UIPushConstant), cmdList);
+		device.drawInstanced(6, static_cast<uint32_t>(g_UIParamsData.size()), 0, 0, cmdList);
+
+		// Text pipeline
 		device.bindPipeline(g_TextPipeline, cmdList);
 		device.bindResource(g_TextParamsBuffers[device.getBufferIndex()], "g_TextParamsBuffer", g_TextPipeline, cmdList);
 
@@ -147,8 +244,8 @@ namespace sr::uipass {
 		device.drawInstanced(6, static_cast<uint32_t>(g_TextParamsData.size()), 0, 0, cmdList);
 
 		g_TextParamsData.clear();
+		g_UIParamsData.clear();
 		g_CursorOrigin = g_DefaultCursorOrigin;
-		g_CursorOriginStep = { 0, 0 };
 		g_SameLineActive = false;
 	}
 

@@ -55,7 +55,7 @@ namespace sr {
 				throw std::runtime_error("ASSET ERROR: Failed to load image file!");
 			}
 
-			const uint32_t bytesPerPixel = static_cast<uint32_t>(STBI_rgb_alpha);
+			const uint32_t bytesPerPixel = 4;
 
 			TextureInfo textureInfo{};
 			textureInfo.width = width;
