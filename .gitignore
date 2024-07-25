@@ -140,6 +140,8 @@ cmake_install.cmake
 # CMake
 CMakeDoxyfile.in
 CMakeDoxygenDefaults.cmake
+CPackConfig.cmake
+CPackSourceConfig.cmake
 
 # MacOS
 .DS_Store
