@@ -30,7 +30,7 @@ namespace sr {
 		m_Window = std::make_unique<Window>(windowInfo);
 		
 		#if defined(SR_WINDOWS)
-			m_Device = std::make_unique<GraphicsDevice_DX12>(m_Width, m_Height, (HWND)m_Window->getHandle());
+			m_Device = std::make_unique<GraphicsDevice_DX12>(m_Width, m_Height, m_Window->getHandle());
 		#endif
 
 		m_RenderGraph = std::make_unique<RenderGraph>(*m_Device);
@@ -49,24 +49,26 @@ namespace sr {
 		preInitialize();
 		onInitialize();
 
-		MSG msg = {};
-		while (msg.message != WM_QUIT) {
+		bool firstFrame = true;
+		while (!m_Window->shouldClose()) {
+			m_Window->pollEvents();
+
 			static auto lastTime = std::chrono::high_resolution_clock::now();
 			const auto currentTime = std::chrono::high_resolution_clock::now();
 
-			if (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
-				TranslateMessage(&msg);
-				DispatchMessage(&msg);
-			}
-			else {
-				m_FrameInfo.dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
-				m_FrameInfo.cameraMoved = false;
-				m_FrameInfo.width = static_cast<uint32_t>(m_Width);
-				m_FrameInfo.height = static_cast<uint32_t>(m_Height);
-				lastTime = currentTime;
+			m_FrameInfo.dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+			lastTime = currentTime;
+			m_FrameInfo.cameraMoved = false;
+			m_FrameInfo.width = static_cast<uint32_t>(m_Width);
+			m_FrameInfo.height = static_cast<uint32_t>(m_Height);
 
-				update(m_FrameInfo);
-				render(m_FrameInfo);
+			update(m_FrameInfo);
+			render(m_FrameInfo);
+
+			// Show the window once ONE frame has been generated
+			if (firstFrame) {
+				m_Window->show();
+				firstFrame = false;
 			}
 		}
 

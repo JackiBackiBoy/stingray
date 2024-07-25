@@ -14,8 +14,8 @@ namespace sr::fstripass {
 	static bool g_Initialized = false;
 
 	static void initialize(GraphicsDevice& device) {
-		device.createShader(ShaderStage::VERTEX, L"assets/shaders/fullscreen_tri.vs.hlsl", g_VertexShader);
-		device.createShader(ShaderStage::PIXEL, L"assets/shaders/fullscreen_tri.ps.hlsl", g_PixelShader);
+		device.createShader(ShaderStage::VERTEX, "assets/shaders/fullscreen_tri.vs.hlsl", g_VertexShader);
+		device.createShader(ShaderStage::PIXEL, "assets/shaders/fullscreen_tri.ps.hlsl", g_PixelShader);
 
 		const PipelineInfo pipelineInfo = {
 			.vertexShader = &g_VertexShader,

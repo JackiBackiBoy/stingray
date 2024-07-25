@@ -6,6 +6,7 @@
 #include "dxc/dxcapi.h"
 #include <d3d12shader.h>
 
+#include <Windows.h>
 #include <cassert>
 #include <format>
 #include <unordered_set>
@@ -26,7 +27,7 @@ namespace sr {
 		}
 	}
 
-	GraphicsDevice_DX12::GraphicsDevice_DX12(int width, int height, HWND window) {
+	GraphicsDevice_DX12::GraphicsDevice_DX12(int width, int height, void* window) {
 		createDXGIFactory();
 		createDevice();
 		checkRayTracingSupport();
@@ -176,7 +177,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::createDescriptorHeaps() {
-		m_RTVDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NUM_BUFFERS + MAX_RTV_DESCRIPTORS, this);
+		m_RTVDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, MAX_RTV_DESCRIPTORS, this);
 		m_DSVDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 8, this);
 		m_ResourceDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, MAX_TEXTURE_DESCRIPTORS, this); // TODO: We should probably chain together sums of resource types here in the `capacity` parameter
 		m_SamplerDescriptorHeap.init(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, MAX_SAMPLER_DESCRIPTORS, this);
@@ -632,15 +633,16 @@ namespace sr {
 		m_SamplerDescriptorHeap.offsetCurrentDescriptorHandle();
 	}
 
-	void GraphicsDevice_DX12::createShader(ShaderStage stage, const std::wstring& path, Shader& shader) {
+	void GraphicsDevice_DX12::createShader(ShaderStage stage, const std::string& path, Shader& shader) {
 		auto internalState = std::make_shared<Shader_DX12>();
 		internalState->stage = stage;
 
 		shader.stage = stage;
 		shader.internalState = internalState;
 
+		const std::wstring wPath = sr::utilities::toWideString(path);
 		WCHAR absolutePath[MAX_PATH] = { 0 };
-		GetFullPathName(path.c_str(), MAX_PATH, absolutePath, nullptr);
+		GetFullPathName(wPath.c_str(), MAX_PATH, absolutePath, nullptr);
 
 		const std::wstring directory = std::wstring(path.begin(), path.begin() + path.find_last_of(L'/') + 1);
 		WCHAR absoluteDirectory[MAX_PATH] = { 0 };
@@ -715,7 +717,7 @@ namespace sr {
 		assert(SUCCEEDED(hr) && "Failed to compile shader!");
 
 		if (FAILED(hr)) {
-			OutputDebugString(std::format(L"Failed to compile shader at: {}", path).c_str());
+			OutputDebugString(std::format(L"Failed to compile shader at: {}", wPath).c_str());
 		}
 
 		// Get compilation errors (if any)
@@ -839,9 +841,11 @@ namespace sr {
 		internalState->shaderBlob = compiledShaderBlob;
 	}
 
-	void GraphicsDevice_DX12::createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, HWND window) {
+	void GraphicsDevice_DX12::createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, void* window) {
 		auto internalState = std::make_shared<SwapChain_DX12>();
 		internalState->info = info;
+
+		HWND internalWindow = reinterpret_cast<HWND>(window);
 
 		swapChain.info = info;
 		swapChain.internalState = internalState;
@@ -863,7 +867,7 @@ namespace sr {
 		ComPtr<IDXGISwapChain1> dxgiSwapChain1 = nullptr;
 		ThrowIfFailed(m_DXGIFactory->CreateSwapChainForHwnd(
 			m_CommandQueues[(size_t)QueueType::DIRECT].commandQueue.Get(),
-			window,
+			internalWindow,
 			&swapChainDesc,
 			nullptr,
 			nullptr,
@@ -871,7 +875,7 @@ namespace sr {
 		));
 
 		// Disable Alt + Enter fullscreen toggle feature
-		ThrowIfFailed(m_DXGIFactory->MakeWindowAssociation(window, DXGI_MWA_NO_ALT_ENTER));
+		ThrowIfFailed(m_DXGIFactory->MakeWindowAssociation(internalWindow, DXGI_MWA_NO_ALT_ENTER));
 		ThrowIfFailed(dxgiSwapChain1.As(&internalState->swapChain));
 
 		m_BufferIndex = internalState->swapChain->GetCurrentBackBufferIndex();
@@ -2033,28 +2037,12 @@ namespace sr {
 				);
 
 				commandQueue.submittedCommandLists.clear();
-
-				ThrowIfFailed(commandQueue.commandQueue->Signal(
-					m_FrameFences[m_BufferIndex][q].Get(),
-					1
-				));
-			}
-			else {
-				ThrowIfFailed(commandQueue.commandQueue->Signal(
-					m_FrameFences[m_BufferIndex][q].Get(),
-					1
-				));
-
-				continue;
 			}
 
-			//uint64_t& fenceWaitForValue = commandQueue.fenceWaitForValue;
-			//++fenceWaitForValue;
-
-			//ThrowIfFailed(commandQueue.commandQueue->Signal(
-			//	commandQueue.fence.Get(),
-			//	fenceWaitForValue
-			//));
+			ThrowIfFailed(commandQueue.commandQueue->Signal(
+				m_FrameFences[m_BufferIndex][q].Get(),
+				1
+			));
 		}
 
 		UINT presentFlags = 0;
@@ -2075,16 +2063,6 @@ namespace sr {
 
 			m_FrameFences[m_BufferIndex][q]->Signal(0);
 		}
-
-		// TODO: This might be flawed
-		//for (size_t q = 0; q < QUEUE_COUNT; ++q) {
-		//	const CommandQueue& commandQueue = m_CommandQueues[q];
-
-		//	// GPU has not finished executing the command lists
-		//	if (commandQueue.fence->GetCompletedValue() < commandQueue.fenceWaitForValue) {
-		//		commandQueue.fence->SetEventOnCompletion(commandQueue.fenceWaitForValue, nullptr);
-		//	}
-		//}
 
 		m_BufferIndex = (m_BufferIndex + 1) % static_cast<uint32_t>(NUM_BUFFERS);
 	}

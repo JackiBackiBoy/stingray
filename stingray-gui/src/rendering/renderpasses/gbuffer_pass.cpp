@@ -18,8 +18,8 @@ namespace sr::gbufferpass {
 	static bool g_Initialized = false;
 
 	static void initialize(GraphicsDevice& device) {
-		device.createShader(ShaderStage::VERTEX, L"assets/shaders/gbuffer.vs.hlsl", g_VertexShader);
-		device.createShader(ShaderStage::PIXEL, L"assets/shaders/gbuffer.ps.hlsl", g_PixelShader);
+		device.createShader(ShaderStage::VERTEX, "assets/shaders/gbuffer.vs.hlsl", g_VertexShader);
+		device.createShader(ShaderStage::PIXEL, "assets/shaders/gbuffer.ps.hlsl", g_PixelShader);
 
 		const PipelineInfo pipelineInfo = {
 			.vertexShader = &g_VertexShader,

@@ -109,7 +109,7 @@ namespace sr::rtaopass {
 		writeTLASInstances(device, entities);
 
 		// Ray-tracing shader library
-		device.createShader(ShaderStage::LIBRARY, L"assets/shaders/rtao.hlsl", g_RayTracingShaderLibrary);
+		device.createShader(ShaderStage::LIBRARY, "assets/shaders/rtao.hlsl", g_RayTracingShaderLibrary);
 
 		// Pipeline
 		const RayTracingPipelineInfo rtPipelineInfo = {

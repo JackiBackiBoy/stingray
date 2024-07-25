@@ -1,6 +1,5 @@
 #pragma once
 
-#include <windows.h>
 #include <cstdint>
 #include <string>
 
@@ -19,8 +18,8 @@ namespace sr {
 		virtual void createBuffer(const BufferInfo& info, Buffer& buffer, const void* data) = 0;
 		virtual void createPipeline(const PipelineInfo& info, Pipeline& pipeline) = 0;
 		virtual void createSampler(const SamplerInfo& info, Sampler& sampler) = 0;
-		virtual void createShader(ShaderStage stage, const std::wstring& path, Shader& shader) = 0;
-		virtual void createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, HWND window) = 0;
+		virtual void createShader(ShaderStage stage, const std::string& path, Shader& shader) = 0;
+		virtual void createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, void* window) = 0;
 		virtual void createTexture(const TextureInfo& info, Texture& texture, const SubresourceData* data) = 0;
 		virtual void createShaderTable(const RayTracingPipeline& rtPipeline, Buffer& table, const std::string& exportName) = 0;
 

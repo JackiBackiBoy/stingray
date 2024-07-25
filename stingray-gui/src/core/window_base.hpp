@@ -32,7 +32,8 @@ namespace sr {
 		IWindow() {}
 		virtual ~IWindow() {}
 
-		virtual bool pollEvents() = 0;
+		virtual void pollEvents() = 0;
+		virtual void show() = 0;
 		virtual bool shouldClose() = 0;
 
 		virtual int getClientWidth() const = 0;

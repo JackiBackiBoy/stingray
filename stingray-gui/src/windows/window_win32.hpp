@@ -11,7 +11,8 @@ namespace sr {
 		WindowWin32(const WindowInfo& info);
 		virtual ~WindowWin32();
 
-		bool pollEvents() override;
+		void pollEvents() override;
+		void show() override;
 		bool shouldClose() override;
 
 		int getClientWidth() const override { return m_ClientRect.right - m_ClientRect.left; }

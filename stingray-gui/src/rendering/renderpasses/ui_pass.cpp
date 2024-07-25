@@ -126,8 +126,8 @@ namespace sr::uipass {
 		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 14, g_DefaultFont, device);
 
 		// Text pipeline
-		device.createShader(ShaderStage::VERTEX, L"assets/shaders/text.vs.hlsl", g_TextVertexShader);
-		device.createShader(ShaderStage::PIXEL, L"assets/shaders/text.ps.hlsl", g_TextPixelShader);
+		device.createShader(ShaderStage::VERTEX, "assets/shaders/text.vs.hlsl", g_TextVertexShader);
+		device.createShader(ShaderStage::PIXEL, "assets/shaders/text.ps.hlsl", g_TextPixelShader);
 
 		g_TextBlendState.alphaToCoverage = false;
 		g_TextBlendState.independentBlend = false;
@@ -157,8 +157,8 @@ namespace sr::uipass {
 		}
 
 		// General UI pipeline
-		device.createShader(ShaderStage::VERTEX, L"assets/shaders/ui.vs.hlsl", g_UIVertexShader);
-		device.createShader(ShaderStage::PIXEL, L"assets/shaders/ui.ps.hlsl", g_UIPixelShader);
+		device.createShader(ShaderStage::VERTEX, "assets/shaders/ui.vs.hlsl", g_UIVertexShader);
+		device.createShader(ShaderStage::PIXEL, "assets/shaders/ui.ps.hlsl", g_UIPixelShader);
 
 		g_UIBlendState.alphaToCoverage = false;
 		g_UIBlendState.independentBlend = false;

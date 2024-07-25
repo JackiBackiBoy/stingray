@@ -13,18 +13,18 @@ namespace sr {
 		std::wstring wTitle = sr::utilities::toWideString(info.title);
 
 		const WNDCLASSEX windowClass = {
-					.cbSize = sizeof(WNDCLASSEX),
-					.style = CS_OWNDC,
-					.lpfnWndProc = WindowProcedure,
-					.cbClsExtra = 0,
-					.cbWndExtra = 0,
-					.hInstance = GetModuleHandle(nullptr),
-					.hIcon = nullptr,
-					.hCursor = LoadCursor(nullptr, IDC_ARROW),
-					.hbrBackground = nullptr,
-					.lpszMenuName = nullptr,
-					.lpszClassName = wTitle.c_str(),
-					.hIconSm = nullptr
+			.cbSize = sizeof(WNDCLASSEX),
+			.style = CS_OWNDC,
+			.lpfnWndProc = WindowProcedure,
+			.cbClsExtra = 0,
+			.cbWndExtra = 0,
+			.hInstance = GetModuleHandle(nullptr),
+			.hIcon = nullptr,
+			.hCursor = LoadCursor(nullptr, IDC_ARROW),
+			.hbrBackground = nullptr,
+			.lpszMenuName = nullptr,
+			.lpszClassName = wTitle.c_str(),
+			.hIconSm = nullptr
 		};
 		RegisterClassEx(&windowClass);
 
@@ -85,29 +85,28 @@ namespace sr {
 			windowClass.hInstance,
 			this
 		);
-
-		ShowWindow(m_Handle, SW_SHOW);
 	}
 
 	WindowWin32::~WindowWin32() {
 
 	}
 
-	bool WindowWin32::pollEvents() {
-		bool result = false;
+	void WindowWin32::pollEvents() {
 		MSG msg = {};
 
-		if (PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-			result = true;
+		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+			if (msg.message == WM_QUIT) {
+				m_ShouldClose = true;
+			}
+			else {
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
+	}
 
-		if (msg.message == WM_QUIT) {
-			m_ShouldClose = true;
-		}
-
-		return result;
+	void WindowWin32::show() {
+		ShowWindow(m_Handle, SW_SHOW);
 	}
 
 	bool WindowWin32::shouldClose() {

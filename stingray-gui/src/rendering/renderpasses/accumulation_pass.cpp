@@ -15,8 +15,8 @@ namespace sr::accumulationpass {
 	static bool g_Initialized = false;
 
 	static void initialize(RenderGraph& graph, GraphicsDevice& device) {
-		device.createShader(ShaderStage::VERTEX, L"assets/shaders/accumulation.vs.hlsl", g_VertexShader);
-		device.createShader(ShaderStage::PIXEL, L"assets/shaders/accumulation.ps.hlsl", g_PixelShader);
+		device.createShader(ShaderStage::VERTEX, "assets/shaders/accumulation.vs.hlsl", g_VertexShader);
+		device.createShader(ShaderStage::PIXEL, "assets/shaders/accumulation.ps.hlsl", g_PixelShader);
 
 		const PipelineInfo pipelineInfo = {
 			.vertexShader = &g_VertexShader,

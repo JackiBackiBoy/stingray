@@ -15,15 +15,15 @@ using namespace Microsoft::WRL;
 namespace sr {
 	class GraphicsDevice_DX12 final : public GraphicsDevice {
 	public:
-		GraphicsDevice_DX12(int width, int height, HWND window);
+		GraphicsDevice_DX12(int width, int height, void* window);
 		~GraphicsDevice_DX12();
 
 		/* Resource Creation */
 		void createBuffer(const BufferInfo& info, Buffer& buffer, const void* data) override;
 		void createPipeline(const PipelineInfo& info, Pipeline& pipeline) override;
 		void createSampler(const SamplerInfo& info, Sampler& sampler) override;
-		void createShader(ShaderStage stage, const std::wstring& path, Shader& shader) override;
-		void createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, HWND window) override;
+		void createShader(ShaderStage stage, const std::string& path, Shader& shader) override;
+		void createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, void* window) override;
 		void createTexture(const TextureInfo& info, Texture& texture, const SubresourceData* data) override;
 		void createShaderTable(const RayTracingPipeline& rtPipeline, Buffer& table, const std::string& exportName) override;
 
