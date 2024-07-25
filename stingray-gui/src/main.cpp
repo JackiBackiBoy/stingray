@@ -4,7 +4,7 @@ using namespace sr;
 
 class Sandbox final : public Application {
 public:
-    Sandbox() : Application("Sandbox (DX12)", 1920, 1080) {}
+    Sandbox() : Application("Stingray", 1920, 1080) {}
     ~Sandbox() {}
 
     void onInitialize() override {

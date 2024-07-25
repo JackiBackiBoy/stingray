@@ -4,6 +4,11 @@ project(stingray-gui LANGUAGES CXX)
 
 # Dependency paths
 set(FREETYPE_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/freetype/include/)
+set(DX12_AGILITY_SDK_DIR ${CMAKE_HOME_DIRECTORY}/vendor/agility_sdk/)
+set(DXC_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxc/include/)
+set(DXCOMPILER_DLL_PATH ${CMAKE_HOME_DIRECTORY}/vendor/dxc/binaries/dxcompiler.dll)
+set(DXIL_DLL_PATH ${CMAKE_HOME_DIRECTORY}/vendor/dxc/binaries/dxil.dll)
+set(GLM_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/glm/include/)
 
 # Settings
 set(DCMAKE_GENERATOR_PLATFORM "x64")
@@ -109,9 +114,6 @@ endif()
 if (WIN32)
     add_executable(stingray-gui WIN32 ${SOURCE_FILES} ${SOURCE_FILES_PLATFORM})
 
-    set(DXC_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxc/include/)
-    set(GLM_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/glm/include/)
-
     target_compile_definitions(stingray-gui PRIVATE
         SR_WINDOWS
         NOMINMAX
@@ -138,6 +140,25 @@ elseif(APPLE)
 
 endif()
 
+# ------ Custom build commands ------
+if (WIN32)
+    # Copy DX12 Dependencies
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${DX12_AGILITY_SDK_DIR}$<CONFIG>/D3D12"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/D3D12"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${DXCOMPILER_DLL_PATH}
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dxcompiler.dll"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${DXIL_DLL_PATH}
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dxil.dll"
+        COMMENT "Copying DirectX 12 Agility SDK, dxcompiler.dll and dxil.dll to runtime output directory"
+    )
 
-# Target libraries
+    add_custom_target(copy_dependencies_DX12 ALL DEPENDS ${PROJECT_NAME}
+        COMMENT "Ensuring DirectX 12 Agility SDK, dxcompiler.dll and dxil.dll are copied to runtime output directory"
+    )
+endif()
 
