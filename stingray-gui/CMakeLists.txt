@@ -86,6 +86,10 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.hpp
 
+    # UI
+    ${SOURCE_DIR}/ui/ui_event.cpp
+    ${SOURCE_DIR}/ui/ui_event.hpp
+
     # Utility
     ${SOURCE_DIR}/utility/json.hpp
     ${SOURCE_DIR}/utility/stb_image.h

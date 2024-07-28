@@ -135,7 +135,7 @@ namespace sr {
 		const D3D12_COMMAND_QUEUE_DESC directQueueDesc = {
 			.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
 			.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-			.NodeMask = 0U
+			.NodeMask = 0
 		};
 
 		ThrowIfFailed(m_Device->CreateCommandQueue(
@@ -147,22 +147,13 @@ namespace sr {
 		const D3D12_COMMAND_QUEUE_DESC copyQueueDesc = {
 			.Type = D3D12_COMMAND_LIST_TYPE_COPY,
 			.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-			.NodeMask = 0U
+			.NodeMask = 0
 		};
 
 		ThrowIfFailed(m_Device->CreateCommandQueue(
 			&copyQueueDesc,
 			IID_PPV_ARGS(&m_CommandQueues[(size_t)QueueType::COPY].commandQueue)
 		));
-
-		// Create fence for each queue type
-		//for (size_t q = 0; q < QUEUE_COUNT; ++q) {
-		//	ThrowIfFailed(m_Device->CreateFence(
-		//		0,
-		//		D3D12_FENCE_FLAG_NONE,
-		//		IID_PPV_ARGS(&m_CommandQueues[q].fence)
-		//	));
-		//}
 
 		// Frame fences
 		for (size_t f = 0; f < NUM_BUFFERS; ++f) {
@@ -195,8 +186,8 @@ namespace sr {
 		heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
 		heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
 		heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		heapProperties.CreationNodeMask = 0U;
-		heapProperties.VisibleNodeMask = 0U;
+		heapProperties.CreationNodeMask = 0;
+		heapProperties.VisibleNodeMask = 0;
 
 		D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
 

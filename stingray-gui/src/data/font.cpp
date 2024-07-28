@@ -4,6 +4,7 @@
 #include FT_FREETYPE_H
 #include <freetype/freetype.h>
 
+#include <limits>
 #include <stdexcept>
 
 namespace sr {
@@ -82,6 +83,7 @@ namespace sr {
 
 			uint8_t* atlasPixels = (uint8_t*)calloc(static_cast<size_t>(atlasWidth * atlasHeight), 1);
 			unsigned int tallestCharInRow = 0;
+			int maxNegativeBearing = 0;
 
 			// Fill out the atlas
 			for (unsigned char c = 32; c < 127; ++c) {
@@ -105,6 +107,11 @@ namespace sr {
 				// Max bearing
 				if (glyph.bearingY > font.maxBearingY) {
 					font.maxBearingY = glyph.bearingY;
+				}
+
+				// Max negative bearing (i.e. the amount the glyph goes beneath the baseline)
+				if ((int)glyph.height - glyph.bearingY > maxNegativeBearing) {
+					maxNegativeBearing = (int)glyph.height - glyph.bearingY;
 				}
 
 				if (c == ' ') { // we do not have to store 'white-space' in the atlas
@@ -138,6 +145,8 @@ namespace sr {
 
 				atlasOffsetX += bmp->width + padding;
 			}
+
+			font.boundingBoxHeight = maxNegativeBearing + font.maxBearingY;
 
 			FT_Done_FreeType(ft);
 

@@ -4,6 +4,7 @@
 
 #include "../core/utilities.hpp"
 #include "../input/rawinput.hpp"
+#include "../rendering/renderpasses/ui_pass.hpp"
 
 namespace sr {
 
@@ -164,9 +165,9 @@ namespace sr {
 		switch (message) {
 		case WM_NCCREATE:
 			{
-			CREATESTRUCT* pCreateStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
-			pWindow = reinterpret_cast<WindowWin32*>(pCreateStruct->lpCreateParams);
-			SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)pWindow);
+				CREATESTRUCT* pCreateStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
+				pWindow = reinterpret_cast<WindowWin32*>(pCreateStruct->lpCreateParams);
+				SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)pWindow);
 			}
 			break;
 		case WM_ERASEBKGND:
@@ -177,6 +178,36 @@ namespace sr {
 		case WM_INPUT:
 			sr::rawinput::parseMessage((void*)lParam);
 			return 0;
+		case WM_LBUTTONDOWN:
+		case WM_MBUTTONDOWN:
+		case WM_RBUTTONDOWN:
+		case WM_XBUTTONDOWN:
+		case WM_LBUTTONUP:
+		case WM_MBUTTONUP:
+		case WM_RBUTTONUP:
+		case WM_XBUTTONUP:
+		case WM_LBUTTONDBLCLK:
+		case WM_MBUTTONDBLCLK:
+		case WM_RBUTTONDBLCLK:
+		case WM_XBUTTONDBLCLK:
+		case WM_MOUSEWHEEL:
+		case WM_MOUSEHWHEEL:
+		case WM_MOUSEMOVE:
+		case WM_MOUSELEAVE:
+			{
+				if (pWindow != nullptr) {
+					UIEvent event = pWindow->createMouseEvent(message, wParam, lParam);
+					sr::uipass::processEvent(event);
+				}
+			}
+			break;
+		case WM_SETFOCUS:
+			{
+				if (pWindow != nullptr) {
+					pWindow->m_EnteringWindow = true;
+				}
+			}
+			break;
 		case WM_NCCALCSIZE:
 			{
 				if (!has_flag(pWindow->m_WindowInfo.flags, WindowFlag::NO_TITLEBAR)) {
@@ -236,6 +267,8 @@ namespace sr {
 				RECT rcWindow{};
 				GetWindowRect(window, &rcWindow);
 
+				const bool insideWindow = ptMouse.x >= rcWindow.left && ptMouse.x <= rcWindow.right &&
+										  ptMouse.y >= rcWindow.top && ptMouse.y <= rcWindow.bottom;
 				const int sizingBorder = pWindow->m_SizingBorder;
 				const int titlebarHeight = pWindow->m_TitlebarHeight;
 
@@ -253,12 +286,148 @@ namespace sr {
 
 				uint8_t hitstate = /*(minimize << 7) | (maximize << 6) | (close << 5) |*/ (caption << 4) | (top << 3) | (left << 2) | (bottom << 1) | (right);
 
-				return hitTestNCA(hitstate);
+				int result = hitTestNCA(hitstate);
+
+				if (result == HTNOWHERE && insideWindow) {
+					result = HTCLIENT;
+				}
+
+				return result;
 			}
 			break;
 		}
 
 		return DefWindowProc(window, message, wParam, lParam);
+	}
+
+	UIEvent WindowWin32::createMouseEvent(UINT message, WPARAM wParam, LPARAM lParam) {
+		UIEvent event = UIEvent(UIEventType::MouseMove);
+		MouseEventData& mouse = event.getMouseData();
+
+		// Acquire mouse position
+		POINT pt;
+		pt.x = GET_X_LPARAM(lParam);
+		pt.y = GET_Y_LPARAM(lParam);
+
+		if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+			ScreenToClient(m_Handle, &pt);
+		}
+
+		mouse.position = { pt.x, pt.y };
+
+		// Acquire mouse button states
+		mouse.downButtons.left = (GET_KEYSTATE_WPARAM(wParam) & MK_LBUTTON) > 0;
+		mouse.downButtons.middle = (GET_KEYSTATE_WPARAM(wParam) & MK_MBUTTON) > 0;
+		mouse.downButtons.right = (GET_KEYSTATE_WPARAM(wParam) & MK_RBUTTON) > 0;
+
+		if (message == WM_MOUSEWHEEL) {
+			mouse.wheelDelta.y = GET_WHEEL_DELTA_WPARAM(wParam) * 10.0f / WHEEL_DELTA;
+		}
+		else if (message == WM_MOUSEHWHEEL) {
+			mouse.wheelDelta.x = GET_WHEEL_DELTA_WPARAM(wParam) * 10.0f / WHEEL_DELTA;
+		}
+
+		// Check which mouse buttons caused the mouse event (if any)
+		switch (message) {
+		case WM_LBUTTONUP:
+		case WM_LBUTTONDOWN:
+		case WM_LBUTTONDBLCLK:
+			mouse.causeButtons.left = true;
+			break;
+		case WM_RBUTTONUP:
+		case WM_RBUTTONDOWN:
+		case WM_RBUTTONDBLCLK:
+			mouse.causeButtons.right = true;
+			break;
+		case WM_MBUTTONUP:
+		case WM_MBUTTONDOWN:
+		case WM_MBUTTONDBLCLK:
+			mouse.causeButtons.middle = true;
+			break;
+		case WM_MOUSEMOVE:
+			if (m_MouseButtonEvent.getType() == UIEventType::MouseDown) {
+				mouse.causeButtons = m_MouseButtonEvent.getMouseData().causeButtons;
+			}
+			break;
+		}
+
+		bool buttonPressed = mouse.downButtons.left || mouse.downButtons.middle || mouse.downButtons.right;
+
+		// Set event types accordingly
+		switch (message) {
+		case WM_LBUTTONUP:
+		case WM_MBUTTONUP:
+		case WM_RBUTTONUP:
+		case WM_XBUTTONUP:
+			event.setType(UIEventType::MouseUp);
+			event.getMouseData().clickCount = 0;
+
+			if (!buttonPressed) {
+				ReleaseCapture();
+			}
+			break;
+		case WM_LBUTTONDBLCLK:
+		case WM_MBUTTONDBLCLK:
+		case WM_RBUTTONDBLCLK:
+		case WM_XBUTTONDBLCLK:
+			event.setType(UIEventType::MouseDown);
+			event.getMouseData().clickCount = 2;
+			break;
+		case WM_LBUTTONDOWN:
+		case WM_MBUTTONDOWN:
+		case WM_RBUTTONDOWN:
+		case WM_XBUTTONDOWN:
+			event.setType(UIEventType::MouseDown);
+			event.getMouseData().clickCount = 1;
+			SetCapture(m_Handle);
+			break;
+		case WM_MOUSELEAVE:
+		case WM_NCMOUSELEAVE:
+		{
+			event.setType(UIEventType::MouseExitWindow);
+			m_TrackingMouseLeave = false;
+		}
+		break;
+		case WM_MOUSEMOVE:
+			// Hack: The Windows OS sends a WM_MOUSEMOVE message together with mouse down
+			// flag when the window becomes the foreground window. Thus, we must also
+			// check whether the mouse down event is the first since regaining the
+			// foreground window focus. When handling WM_SETFOCUS we set the
+			// m_EnteringWindow flag to 'true' which indicates this.
+			// If that is the case, then we will not interpret that as a mouse-drag event
+			// and then reset m_EnteringWindow to 'false'.
+			event.setType((buttonPressed && !m_EnteringWindow) ? UIEventType::MouseDrag : UIEventType::MouseMove);
+
+			if (m_EnteringWindow) {
+				m_EnteringWindow = false;
+			}
+
+			break;
+		case WM_MOUSEWHEEL:
+		case WM_MOUSEHWHEEL:
+			event.setType(UIEventType::MouseWheel);
+			break;
+		}
+
+		if (!m_TrackingMouseLeave && message != WM_MOUSELEAVE && message != WM_NCMOUSELEAVE && message != WM_NCMOUSEMOVE) {
+			TRACKMOUSEEVENT tme{};
+			tme.cbSize = sizeof(tme);
+			tme.dwFlags = TME_LEAVE;
+			tme.hwndTrack = m_Handle;
+			tme.dwHoverTime = HOVER_DEFAULT;
+
+			TrackMouseEvent(&tme);
+			m_TrackingMouseLeave = true;
+		}
+
+		// Store last occurrence of button press/release
+		if (event.getType() == UIEventType::MouseDown ||
+			event.getType() == UIEventType::MouseUp ||
+			event.getType() == UIEventType::MouseExitWindow) {
+			m_MouseButtonEvent = event;
+		}
+
+		return event;
 	}
 
 }

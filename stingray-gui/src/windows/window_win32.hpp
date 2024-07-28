@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include "../core/window_base.hpp"
+#include "../ui/ui_event.hpp"
 
 namespace sr {
 	class WindowWin32 final : public IWindow {
@@ -24,6 +25,8 @@ namespace sr {
 	private:
 		static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
+		UIEvent createMouseEvent(UINT message, WPARAM wParam, LPARAM lParam);
+
 		WindowInfo m_WindowInfo = {};
 		HWND m_Handle = nullptr;
 		RECT m_ClientRect = {};
@@ -31,7 +34,11 @@ namespace sr {
 		bool m_ShouldClose = false;
 
 		int m_SizingBorder = 8;
-		int m_TitlebarHeight = 30;
+		int m_TitlebarHeight = 31;
+
+		UIEvent m_MouseButtonEvent = { UIEventType::None };
+		bool m_TrackingMouseLeave = false;
+		bool m_EnteringWindow = false;
 	};
 
 	typedef WindowWin32 Window;
