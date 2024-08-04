@@ -56,6 +56,7 @@ namespace sr {
 		PerFrameUBO m_PerFrameUBOData = {};
 
 		// Entities and assets (temporary)
+		Asset m_SofaModel = {};
 		Asset m_CubeModel = {};
 		Asset m_PlaneModel = {};
 		Asset m_StatueModel = {};

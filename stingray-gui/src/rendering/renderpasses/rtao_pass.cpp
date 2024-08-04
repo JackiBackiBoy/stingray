@@ -25,7 +25,9 @@ namespace sr::rtaopass {
 	static Buffer g_RayGenShaderTable = {};
 	static Buffer g_MissShaderTable = {};
 	static Buffer g_HitShaderTable = {};
+
 	static Buffer g_InstanceBuffer = {};
+	static std::vector<RayTracingTLAS::Instance> g_TLASInstances = {};
 
 	static Buffer g_GeometryInfoBuffer = {};
 	static std::vector<GeometryInfo> g_GeometryInfoData = {};
@@ -38,28 +40,66 @@ namespace sr::rtaopass {
 	static bool g_Initialized = false;
 
 	static void createBLASes(GraphicsDevice& device, const std::vector<Entity*>& entities) {
+		uint32_t numBLASes = 0;
+
+		// TODO: For now we create one BLAS per mesh, which is not always ideal
+		for (const auto& entity : entities) {
+			for (const auto& mesh : entity->model->meshes) {
+				++numBLASes;
+			}
+		}
+
+		g_RayTracingBLASes.reserve(static_cast<size_t>(numBLASes));
+		g_TLASInstances.reserve(static_cast<size_t>(numBLASes));
+		device.createRayTracingInstanceBuffer(g_InstanceBuffer, numBLASes);
+
 		for (auto& entity : entities) {
 			// TODO: Add loop for sub-meshes per model
-			g_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
-			RayTracingAS& blas = *g_RayTracingBLASes.back();
 			const Model* model = entity->model;
 
-			blas.info.type = RayTracingASType::BLAS;
-			blas.info.blas.geometries.resize(model->meshes.size());
+			for (size_t i = 0; i < model->meshes.size(); ++i) {
+				const Mesh& mesh = model->meshes[i];
 
-			for (auto& geometry : blas.info.blas.geometries) {
+				g_RayTracingBLASes.push_back(std::make_unique<RayTracingAS>());
+				RayTracingAS& blas = *g_RayTracingBLASes.back();
+
+				blas.info.type = RayTracingASType::BLAS;
+				blas.info.blas.geometries.resize(1);
+
+				// TODO: For now we create one BLAS per mesh, which might not be ideal
+				RayTracingBLASGeometry& geometry = blas.info.blas.geometries[0];
 				geometry.type = RayTracingBLASGeometry::Type::TRIANGLES;
 
 				auto& triangles = geometry.triangles;
 				triangles.vertexBuffer = &model->vertexBuffer;
 				triangles.indexBuffer = &model->indexBuffer;
 				triangles.vertexFormat = Format::R32G32B32_FLOAT;
-				triangles.vertexCount = static_cast<uint32_t>(model->vertices.size());
+				triangles.vertexCount = static_cast<uint32_t>(mesh.numVertices);
 				triangles.vertexStride = sizeof(ModelVertex);
-				triangles.indexCount = static_cast<uint32_t>(model->indices.size());
-			}
+				triangles.vertexByteOffset = sizeof(ModelVertex) * mesh.baseVertex;
+				triangles.indexCount = static_cast<uint32_t>(mesh.numIndices);
+				triangles.indexOffset = mesh.baseIndex;
 
-			device.createRayTracingAS(blas.info, blas);
+				device.createRayTracingAS(blas.info, blas);
+
+				// Store the TLAS instance data (will be written to the actual TLAS later)
+				RayTracingTLAS::Instance instance = {
+					.instanceID = static_cast<uint32_t>(g_TLASInstances.size()),
+					.instanceMask = 1,
+					.instanceContributionHitGroupIndex = 0, // TODO: Check out what this really does
+					.blasResource = &blas
+				};
+
+				// Update the transform data
+				glm::mat4 scale = glm::scale(glm::mat4(1.0f), entity->scale);
+				glm::mat4 rotation = quatToMat4(entity->orientation);
+				glm::mat4 translation = glm::translate(glm::mat4(1.0f), entity->position);
+				glm::mat4 transformation = glm::transpose(translation * rotation * scale); // convert to row-major representation
+
+				std::memcpy(instance.transform, &transformation[0][0], sizeof(instance.transform));
+
+				g_TLASInstances.push_back(instance);
+			}
 		}
 	}
 
@@ -76,35 +116,14 @@ namespace sr::rtaopass {
 	}
 
 	static void writeTLASInstances(GraphicsDevice& device, const std::vector<Entity*>& entities) {
-		for (uint32_t i = 0; i < g_RayTracingBLASes.size(); ++i) {
-			RayTracingTLAS::Instance instance = {
-				.instanceID = i,
-				.instanceMask = 1,
-				.instanceContributionHitGroupIndex = 0, // TODO: Check out what this really does
-				.blasResource = g_RayTracingBLASes[i].get()
-			};
-
-			// Update the transform data
-			Entity* entity = entities[i];
-			glm::mat4 scale = glm::scale(glm::mat4(1.0f), entity->scale);
-			glm::mat4 rotation = quatToMat4(entity->orientation);
-			glm::mat4 translation = glm::translate(glm::mat4(1.0f), entity->position);
-			glm::mat4 transformation = glm::transpose(translation * rotation * scale); // convert to row-major representation
-
-			std::memcpy(instance.transform, &transformation[0][0], sizeof(instance.transform));
-
+		for (uint32_t i = 0; i < g_TLASInstances.size(); ++i) {
 			void* dataSection = (uint8_t*)g_InstanceBuffer.mappedData + i * g_InstanceBuffer.info.stride;
-			device.writeTLASInstance(instance, dataSection);
+			device.writeTLASInstance(g_TLASInstances[i], dataSection);
 		}
 	}
 
 	static void initialize(GraphicsDevice& device, const std::vector<Entity*>& entities) {
-		createBLASes(device, entities);
-
-		// Create ray tracing instance buffer
-		const uint32_t numBLASes = static_cast<uint32_t>(g_RayTracingBLASes.size());
-		device.createRayTracingInstanceBuffer(g_InstanceBuffer, numBLASes);
-
+		createBLASes(device, entities); // NOTE: We also create instance buffer here
 		createTLAS(device);
 		writeTLASInstances(device, entities);
 
@@ -120,7 +139,8 @@ namespace sr::rtaopass {
 			},
 			.hitGroups = {
 				RayTracingShaderHitGroup {.type = RayTracingShaderHitGroup::Type::TRIANGLES, .name = "MyHitGroup" }
-			}
+			},
+			.payloadSize = 4 * sizeof(float) // payload: color
 		};
 
 		device.createRayTracingPipeline(rtPipelineInfo, g_RayTracingPipeline);
@@ -167,7 +187,7 @@ namespace sr::rtaopass {
 		g_MaterialInfoData.reserve(entities.size());
 		for (auto& entity : entities) {
 			const MaterialInfo materialInfo = {
-				.color = entity->color,
+				.color = glm::vec4(entity->color, 1.0f),
 				.roughness = entity->roughness
 			};
 
@@ -213,7 +233,7 @@ namespace sr::rtaopass {
 		const PushConstant pushConstant = {
 			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
 			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
-			.frameCount = (uint32_t)device.getFrameCount() % 32000
+			.frameCount = (uint32_t)device.getFrameCount()
 		};
 
 		device.pushConstantsCompute(&pushConstant, sizeof(pushConstant), cmdList);

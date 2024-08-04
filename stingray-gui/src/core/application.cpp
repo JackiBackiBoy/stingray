@@ -1,5 +1,6 @@
 #include "application.hpp"
 
+#include <algorithm>
 #include <chrono>
 
 #include "../rendering/renderpasses/accumulation_pass.hpp"
@@ -52,6 +53,7 @@ namespace sr {
 		bool firstFrame = true;
 		while (!m_Window->shouldClose()) {
 			m_Window->pollEvents();
+			sr::rawinput::update();
 
 			static auto lastTime = std::chrono::high_resolution_clock::now();
 			const auto currentTime = std::chrono::high_resolution_clock::now();
@@ -141,7 +143,7 @@ namespace sr {
 		};
 
 		Camera& camera = m_FrameInfo.camera;
-		camera.position = { 4.5f, 1.0f, -7.0 };
+		camera.position = { 2.0f, 1.0f, -3.0f };
 		camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(-32.0f));
 
 		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
@@ -162,7 +164,8 @@ namespace sr {
 		}
 
 		// Default samplers
-		const SamplerInfo linearSamplerInfo = {};
+		const SamplerInfo linearSamplerInfo = {
+		};
 		m_Device->createSampler(linearSamplerInfo, m_LinearSampler);
 
 		// Rendergraph
@@ -196,11 +199,16 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("Normal");
 		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
-		fullscreenTriPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
-			sr::fstripass::onExecute(executeInfo);
+		fullscreenTriPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()]);
 		});
 
 		auto& uiPass = m_RenderGraph->addPass("UIPass");
+		uiPass.addInputAttachment("Position");
+		uiPass.addInputAttachment("Albedo");
+		uiPass.addInputAttachment("Normal");
+		uiPass.addInputAttachment("AmbientOcclusion");
+		uiPass.addInputAttachment("AOAccumulation");
 		uiPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
 			sr::uipass::onExecute(executeInfo);
 		});
@@ -212,18 +220,17 @@ namespace sr {
 	}
 
 	void Application::createEntities() {
-		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/sphere.gltf", *m_Device);
+		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/multimeshtest.gltf", *m_Device);
 		m_PlaneModel = sr::assetmanager::loadFromFile("assets/models/plane.gltf", *m_Device);
 		m_StatueModel = sr::assetmanager::loadFromFile("assets/models/statue.gltf", *m_Device);
 
 		// Cornell box
-		const float cornellScale = 5.0f;
+		const float cornellScale = 4.0f;
 
 		auto cornellFloor = addEntity("Floor");
-		cornellFloor->position.y = -1.99f;
 		cornellFloor->scale = glm::vec3(cornellScale);
 		cornellFloor->model = &m_PlaneModel.getModel();
-		cornellFloor->color = { 0.5f, 0.5f, 0.54f, 1.0f };
+		cornellFloor->color = { 0.5f, 0.5f, 0.54f };
 
 		//auto cornellTop = addEntity("Top");
 		//cornellTop->position.y = 2 * cornellScale;
@@ -232,12 +239,12 @@ namespace sr {
 		//cornellTop->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(180.0f));
 
 		auto cornellWallLeft = addEntity("WallLeft");
-		cornellWallLeft->position.x = -cornellScale + 0.01f;
-		cornellWallLeft->position.y = cornellScale - 2.0f;
+		cornellWallLeft->position.x = -cornellScale * 0.5f + 0.01f;
+		cornellWallLeft->position.y = cornellScale * 0.5f;
 		cornellWallLeft->scale = glm::vec3(cornellScale);
 		cornellWallLeft->model = &m_PlaneModel.getModel();
 		cornellWallLeft->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
-		cornellWallLeft->color = { 1.0f, 0.0f, 0.0f, 1.0f };
+		cornellWallLeft->color = { 1.0f, 0.0f, 0.0f };
 
 		//auto cornellWallRight = addEntity("WallRight");
 		//cornellWallRight->position.x = cornellScale;
@@ -248,26 +255,27 @@ namespace sr {
 		//cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
 
 		auto cornellWallBack = addEntity("WallBack");
-		cornellWallBack->position.y = cornellScale - 2.0f;
-		cornellWallBack->position.z = cornellScale;
+		cornellWallBack->position.y = cornellScale * 0.5f;
+		cornellWallBack->position.z = cornellScale * 0.5f;
 		cornellWallBack->scale = glm::vec3(cornellScale);
 		cornellWallBack->model = &m_PlaneModel.getModel();
 		cornellWallBack->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(-90.0f));
 
 		m_SphereEntity = addEntity("Sphere");
-		m_SphereEntity->position.y = 0;
+		m_SphereEntity->scale = glm::vec3(0.5f);
+		m_SphereEntity->position = { -0.3f, 1.5f, 1.0f };
 		m_SphereEntity->model = &m_CubeModel.getModel();
 
 		auto statue = addEntity("Statue");
-		statue->position = { 2.0f, -2.0f, 1.0f };
-		statue->scale = glm::vec3(3.0f);
+		statue->position = { 0.5f, 0.0f, 0.2f };
+		statue->scale = glm::vec3(1.0f);
 		statue->model = &m_StatueModel.getModel();
 		statue->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
 		statue->orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(90.0f)) * statue->orientation;
+		statue->color = { 0.5f, 0.6f, 0.7f };
 	}
 
 	void Application::update(FrameInfo& frameInfo) {
-		sr::rawinput::update();
 		sr::rawinput::RawKeyboardState keyboard = {};
 		sr::rawinput::RawMouseState mouse = {};
 
@@ -278,17 +286,23 @@ namespace sr {
 		Camera& camera = frameInfo.camera;
 		bool& cameraMoved = frameInfo.cameraMoved;
 		const float cameraMoveSpeed = 5.0f;
+		const float mouseSensitivity = 0.01f;
 
 		if (mouse.mouse3) {
 			if (mouse.deltaY != 0.0f) {
-				camera.orientation = camera.orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, mouse.deltaY * frameInfo.dt); // pitch
+				camera.orientation = camera.orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, mouse.deltaY * mouseSensitivity); // pitch
 				cameraMoved = true;
 			}
 
 			if (mouse.deltaX != 0.0f) {
-				camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, mouse.deltaX * frameInfo.dt) * camera.orientation; // yaw
+				camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, mouse.deltaX * mouseSensitivity) * camera.orientation; // yaw
 				cameraMoved = true;
 			}
+		}
+
+		if (mouse.wheelDelta != 0.0f) {
+			camera.verticalFOV = std::clamp(camera.verticalFOV - mouse.wheelDelta * 0.1f, glm::radians(5.0f), glm::radians(130.0f));
+			cameraMoved = true;
 		}
 
 		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
@@ -323,7 +337,7 @@ namespace sr {
 
 		// Update per-frame data
 		const float aspectRatio = (float)m_Width / m_Height;
-		camera.projectionMatrix = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
+		camera.projectionMatrix = glm::perspective(camera.verticalFOV, aspectRatio, 0.1f, 125.0f);
 		camera.viewMatrix = glm::lookAt(camera.position, camera.position + qForward, qUp);
 
 		m_PerFrameUBOData.projectionMatrix = camera.projectionMatrix;

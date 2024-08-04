@@ -9,6 +9,7 @@ namespace sr::gbufferpass {
 		uint32_t normalMapIndex = 1;
 		uint32_t pad1 = 0;
 		uint32_t pad2 = 0;
+		glm::vec3 color = { 1.0f, 1.0f, 1.0f };
 	};
 
 	static Shader g_VertexShader = {};
@@ -77,6 +78,25 @@ namespace sr::gbufferpass {
 				glm::scale(g_PushConstant.modelMatrix, entity->scale);
 
 			for (const auto& mesh : entity->model->meshes) {
+				// Albedo map
+				if (mesh.albedoMapIndex != ~0) {
+					g_PushConstant.albedoMapIndex = device.getDescriptorIndex(entity->model->materialTextures[mesh.albedoMapIndex]);
+				}
+				else {
+					g_PushConstant.albedoMapIndex = 0;
+				}
+
+				// Normal map
+				if (mesh.normalMapIndex != ~0) {
+					g_PushConstant.normalMapIndex = device.getDescriptorIndex(entity->model->materialTextures[mesh.normalMapIndex]);
+				}
+				else {
+					g_PushConstant.normalMapIndex = 1;
+				}
+
+				// Color
+				g_PushConstant.color = entity->color;
+
 				device.pushConstants(&g_PushConstant, sizeof(g_PushConstant), cmdList);
 				device.drawIndexed(mesh.numIndices, mesh.baseIndex, mesh.baseVertex, cmdList);
 			}

@@ -12,7 +12,7 @@ namespace sr {
 		const Model* model = nullptr;
 
 		// NOTE: Temporary attributes that only exist for testing purposes
-		glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		glm::vec3 color = { 1.0f, 1.0f, 1.0f };
 		float roughness = 1.0f;
 	};
 }

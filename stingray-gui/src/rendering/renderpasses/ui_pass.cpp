@@ -71,7 +71,9 @@ namespace sr::uipass {
 	static Asset g_MinimizeIcon = {};
 	static Asset g_MaximizeIcon = {};
 	static Asset g_CloseIcon = {};
+	static Asset g_CheckIcon = {};
 	static Font g_DefaultFont = {};
+	static Font g_DefaultBoldFont = {};
 
 	static glm::vec2 g_DefaultCursorOrigin = { 0, 0 };
 	static glm::vec2 g_CursorOriginReturn = g_DefaultCursorOrigin; // NOTE: Used when 'sameLine' function is used
@@ -90,7 +92,7 @@ namespace sr::uipass {
 			textPosX -= (float)(g_DefaultFont.calcTextWidth(text) / 2);
 		}
 		if (has_flag(posFlags, UIPosFlag::VCENTER)) {
-			textPosY -= (float)(g_DefaultFont.boundingBoxHeight / 2);
+			textPosY -= (float)(g_DefaultFont.maxBearingY / 2);
 		}
 
 		for (size_t i = 0; i < text.length(); ++i) {
@@ -145,9 +147,10 @@ namespace sr::uipass {
 		g_UIParamsData.push_back(uiParams);
 	}
 
-	static void initialize(GraphicsDevice& device, const FrameInfo& frameInfo) {
+	static void initialize(GraphicsDevice& device, RenderGraph& renderGraph, const FrameInfo& frameInfo) {
 		g_Device = &device;
 		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 14, g_DefaultFont, device);
+		//sr::fontloader::loadFromFile("assets/fonts/segoeuib.ttf", 14, g_DefaultBoldFont, device);
 
 		// Text pipeline
 		device.createShader(ShaderStage::VERTEX, "assets/shaders/text.vs.hlsl", g_TextVertexShader);
@@ -215,38 +218,46 @@ namespace sr::uipass {
 		g_MinimizeIcon = sr::assetmanager::loadFromFile("assets/icons/minimize.png", device);
 		g_MaximizeIcon = sr::assetmanager::loadFromFile("assets/icons/maximize.png", device);
 		g_CloseIcon = sr::assetmanager::loadFromFile("assets/icons/close.png", device);
+		g_CheckIcon = sr::assetmanager::loadFromFile("assets/icons/check.png", device);
 
 		// UI
 		g_CursorOrigin = { 0, 31 };
 		auto mainLayout = createLayout(2, 2, frameInfo.width, frameInfo.height - 31);
-		auto settingsLayout = createLayout(8, 1, 200, frameInfo.height - 31, mainLayout);
+		auto leftLayout = createLayout(8, 1, frameInfo.width / 8, frameInfo.height - 31, 0, mainLayout);
 
-		auto statsLayout = createLayout(5, 1, 0, 0, settingsLayout);
-		statsLayout->backgroundColor = UI_COLOR_PRIMARY;
+		auto statsLayout = createLayout(5, 1, 0, 0, 8, leftLayout);
+		statsLayout->backgroundColor = UI_COLOR_PRIMARY1;
 		auto statsTitle = createLabel("Statistics:", statsLayout);
 		g_FPSCounterLabel = createLabel("FPS: ", statsLayout);
 
-		auto button1 = createButton("Button 1", 0, 0, settingsLayout);
-		auto button2 = createButton("Button 2", 0, 0, settingsLayout);
-		auto button3 = createButton("Button 3", 0, 0, settingsLayout);
-		auto button4 = createButton("Button 4", 0, 0, settingsLayout);
-		auto button5 = createButton("Button 5", 0, 0, settingsLayout);
-		auto button6 = createButton("Button 6", 0, 0, settingsLayout);
-		auto button7 = createButton("Button 7", 0, 0, settingsLayout);
+		auto settingsLayout = createLayout(5, 1, 0, 0, 8, leftLayout);
+		settingsLayout->backgroundColor = UI_COLOR_PRIMARY1;
+		auto settingsTitle = createLabel("Settings:", settingsLayout);
+		auto checkbox1 = createCheckBox("Draw Wireframe", true, settingsLayout);
+		auto checkbox2 = createCheckBox("Ambient Occlusion", true, settingsLayout);
+		auto checkbox3 = createCheckBox("Shadows", true, settingsLayout);
+
+		// Renderpass overview
+		auto positionImage = createImage(&renderGraph.getAttachment("Position")->texture, 0, 0, "Position", leftLayout);
+		auto albedoImage = createImage(&renderGraph.getAttachment("Albedo")->texture, 0, 0, "Albedo", leftLayout);
+		auto normalTexture = createImage(&renderGraph.getAttachment("Normal")->texture, 0, 0, "Normal", leftLayout);
+		auto aoImage = createImage(&renderGraph.getAttachment("AmbientOcclusion")->texture, 0, 0, "RTAO", leftLayout);
+		auto aoAccumulatedImage = createImage(&renderGraph.getAttachment("AOAccumulation")->texture, 0, 0, "RTAO (Accumulation)", leftLayout);
 	}
 
 	void onExecute(PassExecuteInfo& executeInfo) {
 		GraphicsDevice& device = *executeInfo.device;
+		RenderGraph& renderGraph = *executeInfo.renderGraph;
 		const CommandList& cmdList = *executeInfo.cmdList;
 		const FrameInfo& frameInfo = *executeInfo.frameInfo;
 
 		if (!g_Initialized) {
-			initialize(device, frameInfo);
+			initialize(device, renderGraph, frameInfo);
 			g_Initialized = true;
 		}
 
-		float fWidth = static_cast<float>(frameInfo.width);
-		float fHeight = static_cast<float>(frameInfo.height);
+		const float fWidth = static_cast<float>(frameInfo.width);
+		const float fHeight = static_cast<float>(frameInfo.height);
 
 		// Update FPS counter
 		const auto currentTime = std::chrono::high_resolution_clock::now();
@@ -306,8 +317,8 @@ namespace sr::uipass {
 		const int currentRow = (layout->elementIndices.size() / layout->cols);
 		const int currentCol = (layout->elementIndices.size() % layout->cols);
 
-		element->position.x = layout->position.x + currentCol * layout->getColWidth();
-		element->position.y = layout->position.y + currentRow * layout->getRowHeight();
+		element->position.x = layout->padding + layout->position.x + currentCol * layout->getColWidth();
+		element->position.y = layout->padding + layout->position.y + currentRow * layout->getRowHeight();
 
 		// Distribute column width error
 		if (currentCol < widthError) {
@@ -334,69 +345,6 @@ namespace sr::uipass {
 		}
 
 		layout->elementIndices.push_back(g_UIElementIndex);
-	}
-
-	UILayout* createLayout(int rows, int cols, int width, int height, UILayout* parentLayout /*= nullptr*/) {
-		UILayout* layout = (UILayout*)g_UIElements.emplace_back(std::make_unique<UILayout>()).get();
-		layout->position = g_CursorOrigin;
-		layout->rows = rows;
-		layout->cols = cols;
-		
-		if (width == 0 && height == 0) {
-			if (parentLayout != nullptr) {
-				layout->width = parentLayout->getColWidth();
-				layout->height = parentLayout->getRowHeight();
-			}
-		}
-		else {
-			layout->width = width;
-			layout->height = height;
-		}
-		
-		if (parentLayout != nullptr) {
-			positionWithLayout(layout, parentLayout);
-		}
-
-		return layout;
-	}
-
-	UIButton* createButton(const std::string& text, int width, int height, UILayout* layout /*= nullptr*/) {
-		UIButton* button = (UIButton*)g_UIElements.emplace_back(std::make_unique<UIButton>()).get();
-		button->position = g_CursorOrigin;
-		button->text = text;
-
-		if (width == 0 && height == 0) {
-			if (layout != nullptr) {
-				button->width = layout->getColWidth();
-				button->height = layout->getRowHeight();
-			}
-			else {
-
-			}
-		}
-		else {
-			button->width = width;
-			button->height = height;
-		}
-		if (layout != nullptr) {
-			positionWithLayout(button, layout);
-		}
-
-		return button;
-	}
-
-	UILabel* createLabel(const std::string& text, UILayout* layout /*= nullptr*/) {
-		UILabel* label = (UILabel*)g_UIElements.emplace_back(std::make_unique<UILabel>()).get();
-		label->position = g_CursorOrigin;
-		label->width = g_DefaultFont.calcTextWidth(text);
-		label->height = g_DefaultFont.boundingBoxHeight;
-		label->text = text;
-
-		if (layout != nullptr) {
-			positionWithLayout(label, layout);
-		}
-
-		return label;
 	}
 
 	void UILayout::draw(GraphicsDevice& device) {
@@ -427,7 +375,17 @@ namespace sr::uipass {
 			break;
 		case UIEventType::MouseExit:
 			{
-				m_DisplayColor = UI_COLOR_PRIMARY;
+				m_DisplayColor = UI_COLOR_PRIMARY1;
+			}
+			break;
+		case UIEventType::MouseDown:
+			{
+				m_DisplayColor = UI_COLOR_CLICK;
+			}
+			break;
+		case UIEventType::MouseUp:
+			{
+				m_DisplayColor = UI_COLOR_HOVER;
 			}
 			break;
 		}
@@ -439,6 +397,53 @@ namespace sr::uipass {
 
 	void UILabel::processEvent(const UIEvent& event) {
 
+	}
+
+	void UICheckBox::draw(GraphicsDevice& device) {
+		drawRect(position, UI_CHECKBOX_SIZE, UI_CHECKBOX_SIZE, UI_COLOR_SECONDARY, nullptr); // border
+		drawRect(position + glm::vec2(1, 1), UI_CHECKBOX_SIZE - 2, UI_CHECKBOX_SIZE - 2, UI_COLOR_PRIMARY2, nullptr); // background
+
+		if (checked) {
+			const Texture* checkTexture = &g_CheckIcon.getTexture();
+			drawRect(
+				position + glm::vec2(UI_CHECKBOX_SIZE / 2 - 16 / 2),
+				16,
+				16,
+				UI_ACCENT_COLOR,
+				checkTexture
+			);
+		}
+
+		drawText(" " + text, position + glm::vec2(UI_CHECKBOX_SIZE, height / 2), UI_COLOR_TEXT_PRIMARY, g_DefaultFont, UIPosFlag::VCENTER);
+	}
+
+	void UICheckBox::processEvent(const UIEvent& event) {
+		switch (event.getType()) {
+		case UIEventType::MouseDown:
+		{
+			isClicked = true;
+		}
+		break;
+		case UIEventType::MouseUp:
+		{
+			if (isClicked) {
+				checked = !checked;
+			}
+
+			isClicked = false;
+		}
+		break;
+		}
+	}
+
+	void UIImage::draw(GraphicsDevice& device) {
+		drawRect(position, width, height, glm::vec4(1.0f), texture);
+
+		const glm::vec2 captionBackgroundPos = position + glm::vec2(0, height - g_DefaultFont.boundingBoxHeight - g_DefaultFont.maxBearingY);
+		drawRect(captionBackgroundPos, width, g_DefaultFont.boundingBoxHeight + g_DefaultFont.maxBearingY, { 0.0f, 0.0f, 0.0f, 0.6f }, nullptr);
+
+		const glm::vec2 captionPos = position + glm::vec2(width / 2, height - g_DefaultFont.boundingBoxHeight);
+		drawText(caption, captionPos, glm::vec4(1.0f), g_DefaultFont, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
 	}
 
 	void processEvent(const UIEvent& event) {
@@ -474,7 +479,122 @@ namespace sr::uipass {
 				g_LastUIElement = hitElement;
 			}
 			break;
+		case UIEventType::MouseDown:
+		case UIEventType::MouseUp:
+			{
+				if (g_CurrentUIElement != nullptr) {
+					g_CurrentUIElement->processEvent(event);
+				}
+			}
+			break;
 		}
+	}
+
+	UILayout* createLayout(int rows, int cols, int width, int height, int padding, UILayout* parentLayout /*= nullptr*/) {
+		UILayout* layout = (UILayout*)g_UIElements.emplace_back(std::make_unique<UILayout>()).get();
+		layout->position = g_CursorOrigin;
+		layout->rows = rows;
+		layout->cols = cols;
+		layout->padding = padding;
+
+		if (width == 0 && height == 0) {
+			if (parentLayout != nullptr) {
+				layout->width = parentLayout->getColWidth();
+				layout->height = parentLayout->getRowHeight();
+			}
+		}
+		else {
+			layout->width = width;
+			layout->height = height;
+		}
+
+		if (parentLayout != nullptr) {
+			positionWithLayout(layout, parentLayout);
+		}
+
+		return layout;
+	}
+
+	UIButton* createButton(const std::string& text, int width, int height, UILayout* layout /*= nullptr*/) {
+		UIButton* button = (UIButton*)g_UIElements.emplace_back(std::make_unique<UIButton>()).get();
+		button->position = g_CursorOrigin;
+		button->text = text;
+
+		if (width == 0 && height == 0) {
+			if (layout != nullptr) {
+				button->width = layout->getColWidth();
+				button->height = layout->getRowHeight();
+			}
+			else {
+
+			}
+		}
+		else {
+			button->width = width;
+			button->height = height;
+		}
+
+		if (layout != nullptr) {
+			positionWithLayout(button, layout);
+		}
+
+		return button;
+	}
+
+	UILabel* createLabel(const std::string& text, UILayout* layout /*= nullptr*/) {
+		UILabel* label = (UILabel*)g_UIElements.emplace_back(std::make_unique<UILabel>()).get();
+		label->position = g_CursorOrigin;
+		label->width = g_DefaultFont.calcTextWidth(text);
+		label->height = g_DefaultFont.boundingBoxHeight;
+		label->text = text;
+
+		if (layout != nullptr) {
+			positionWithLayout(label, layout);
+		}
+
+		return label;
+	}
+
+	UICheckBox* createCheckBox(const std::string& text, bool checked, UILayout* layout) {
+		UICheckBox* checkBox = (UICheckBox*)g_UIElements.emplace_back(std::make_unique<UICheckBox>()).get();
+		checkBox->position = g_CursorOrigin;
+		checkBox->width = UI_CHECKBOX_SIZE + g_DefaultFont.calcTextWidth(" " + text);
+		checkBox->height = UI_CHECKBOX_SIZE;
+		checkBox->text = text;
+		checkBox->checked = checked;
+
+		if (layout != nullptr) {
+			positionWithLayout(checkBox, layout);
+		}
+
+		return checkBox;
+	}
+
+	UIImage* createImage(const Texture* texture, int width, int height, const std::string& caption, UILayout* layout /*= nullptr*/) {
+		UIImage* image = (UIImage*)g_UIElements.emplace_back(std::make_unique<UIImage>()).get();
+		image->position = g_CursorOrigin;
+		image->texture = texture;
+		image->caption = caption;
+
+		if (width == 0 && height == 0) {
+			if (layout != nullptr) {
+				image->width = layout->getColWidth();
+				image->height = layout->getRowHeight();
+			}
+			else {
+
+			}
+		}
+		else {
+			image->width = width;
+			image->height = height;
+		}
+
+		if (layout != nullptr) {
+			positionWithLayout(image, layout);
+		}
+
+		return image;
 	}
 
 }

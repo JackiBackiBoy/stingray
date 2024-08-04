@@ -465,6 +465,7 @@ namespace sr {
 	struct RayTracingPipelineInfo {
 		std::vector<RayTracingShaderLibrary> shaderLibraries = {};
 		std::vector<RayTracingShaderHitGroup> hitGroups = {};
+		uint32_t payloadSize = 0;
 		// TODO: Add more
 	};
 

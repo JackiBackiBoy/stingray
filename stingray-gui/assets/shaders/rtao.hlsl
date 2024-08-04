@@ -27,8 +27,6 @@ ConstantBuffer<PushConstant> pushConstant : register(b0, space2);
 typedef BuiltInTriangleIntersectionAttributes MyAttributes;
 struct RayPayload {
     float4 color;
-    uint randSeed;
-    uint depth;
 };
 
 static const float3 g_SkyColor = float3(0.623, 0.8, 0.913);

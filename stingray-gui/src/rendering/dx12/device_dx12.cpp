@@ -1440,7 +1440,7 @@ namespace sr {
 		}
 
 		// TODO: We likely want to make this dynamic
-		const UINT payloadSize = 4 * sizeof(float) + 2 * sizeof(uint32_t); // This seems wrong
+		const UINT payloadSize = info.payloadSize;
 		const UINT attributeSize = 2 * sizeof(float); // float2 barycentrics (NOTE: Built-in attribute from BuiltInTriangleIntersectionAttributes in the spec)
 
 		auto shaderConfig = stateObjectDesc.CreateSubobject<CD3DX12_RAYTRACING_SHADER_CONFIG_SUBOBJECT>();

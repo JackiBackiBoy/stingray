@@ -27,7 +27,7 @@ namespace sr::fstripass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo) {
+	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO) {
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
 		const CommandList& cmdList = *executeInfo.cmdList;
@@ -50,6 +50,7 @@ namespace sr::fstripass {
 		};
 
 		device.bindPipeline(g_Pipeline, cmdList);
+		device.bindResource(perFrameUBO, "g_PerFrameData", g_Pipeline, cmdList);
 
 		device.pushConstants(&pushConstant, sizeof(pushConstant), cmdList);
 		device.draw(3, 0, cmdList);

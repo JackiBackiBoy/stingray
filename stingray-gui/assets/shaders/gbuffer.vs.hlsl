@@ -27,6 +27,7 @@ struct PushConstant {
     uint normalMapIndex;
     uint pad1;
     uint pad2;
+    float3 color;
 };
 
 ConstantBuffer<PerFrameData> g_PerFrameData : register(b0, space0);
@@ -44,10 +45,9 @@ VSOutput main(VSInput input) {
     // Tangents
     float3 tangent = normalize(input.tangent);
 
-    float3 bitangent = normalize(cross(output.normal, tangent));
     float3 T = normalize(float3(mul(pushConstant.modelMatrix, float4(tangent, 0.0f)).xyz));
-    float3 B = normalize(float3(mul(pushConstant.modelMatrix, float4(bitangent, 0.0f)).xyz));
     float3 N = normalize(float3(mul(pushConstant.modelMatrix, float4(output.normal, 0.0f)).xyz));
+    float3 B = cross(N, T);
     output.TBN = transpose(float3x3(T, B, N));
 
     output.texCoord = input.texCoord;

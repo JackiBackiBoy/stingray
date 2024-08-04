@@ -8,6 +8,7 @@ namespace sr {
 		glm::mat4 projectionMatrix = { 1.0f };
 		glm::mat4 viewMatrix = { 1.0f };
 		glm::vec3 position = { 0.0f, 0.0f, 0.0f };
+		float verticalFOV = glm::radians(60.0f);
 		quat orientation = {};
 	};
 

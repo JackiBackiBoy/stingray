@@ -5,6 +5,7 @@
 
 #include "../utility/stb_image.h"
 #include "../utility/tiny_gltf.h"
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <Windows.h>
 
@@ -124,6 +125,14 @@ namespace sr {
 				mesh.baseVertex = baseVertex;
 				mesh.baseIndex = baseIndex;
 
+				// Nodes (used for positioning multiple meshes)
+				glm::mat4 translation = glm::mat4(1.0f); // default identity matrix
+				const std::vector<double> translationData = gltfModel.nodes[i].translation;
+
+				if (!translationData.empty()) {
+					translation = glm::translate({ 1.0f }, glm::vec3(translationData[0], translationData[1], translationData[2]));
+				}
+
 				// TODO: We should probably support meshes having more than 1 primitive,
 				// as of right now, we do not...
 				for (size_t j = 0; j < gltfMesh.primitives.size(); ++j) {
@@ -183,6 +192,8 @@ namespace sr {
 							positions[k * 3 + 0]
 						};
 
+						vertex.position = glm::vec3(translation * glm::vec4(vertex.position, 1.0f));
+
 						vertex.normal = {
 							normals[k * 3 + 2],
 							normals[k * 3 + 1],
@@ -207,8 +218,10 @@ namespace sr {
 						asset->model.indices.push_back(static_cast<uint32_t>(indices[k]));
 					}
 
+					mesh.numVertices = static_cast<uint32_t>(posAccessor.count);
 					mesh.numIndices = static_cast<uint32_t>(indicesAccessor.count);
 
+					// Materials
 					if (gltfPrimitive.material == -1) {
 						continue;
 					}

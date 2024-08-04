@@ -26,6 +26,7 @@ struct PushConstant {
     uint normalMapIndex;
     uint pad1;
     uint pad2;
+    float3 color;
 };
 
 ConstantBuffer<PerFrameData> g_PerFrameData : register(b0, space0);
@@ -40,11 +41,11 @@ PSOutput main(PSInput input) {
 
     PSOutput output;
     output.position = float4(input.positionWorldSpace, 1.0f);
-    output.albedo = float4(albedoTexture.Sample(sampler, input.texCoord).xyz, 1.0f);
+    output.albedo = float4(pushConstant.color * albedoTexture.Sample(sampler, input.texCoord).xyz, 1.0f);
 
     // Normal
     float3 surfaceNormal = normalMapTexture.Sample(sampler, input.texCoord).xyz;
-    surfaceNormal = surfaceNormal * 2.0f - 1.0f;
+    surfaceNormal = normalize(surfaceNormal * 2.0f - 1.0f);
     surfaceNormal = normalize(float3(mul(input.TBN, surfaceNormal)));
     output.normal = float4(surfaceNormal, 1.0f);
     //output.normal = float4(normalize(input.normal), 1.0f);
