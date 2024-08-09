@@ -26,7 +26,7 @@ struct PushConstant {
 };
 
 ConstantBuffer<PerFrameData> g_PerFrameData : register(b0, space0);
-ConstantBuffer<PerFrameData> g_ShadowUBO : register(b0, space1);
+ConstantBuffer<ShadowUBO> g_ShadowUBO : register(b0, space1);
 ConstantBuffer<PushConstant> pushConstant : register(b0, space2);
 
 VSOutput main(VSInput input) {

@@ -557,11 +557,13 @@ namespace sr {
 
 			// TODO: This might be entirely wrong, we might instead want to have a predefined upload heap for this
 			// I guess we'll just create a temporary upload heap (aka staging buffer)
+			BindFlag stagingBindFlags = info.bindFlags & ~BindFlag::SHADER_RESOURCE;
+
 			const BufferInfo stagingBufferInfo = {
 				.size = info.size,
 				.stride = info.stride,
 				.usage = Usage::UPLOAD,
-				.bindFlags = info.bindFlags,
+				.bindFlags = stagingBindFlags,
 				.miscFlags = info.miscFlags,
 				.persistentMap = false
 			};
@@ -2386,6 +2388,7 @@ namespace sr {
 			switch (internalTexture->subResourceType) {
 			case SubresourceType::RTV:
 			case SubresourceType::SRV:
+			case SubresourceType::DSV:
 				return internalTexture->srvDescriptor.index;
 			case SubresourceType::UAV:
 				return internalTexture->uavDescriptor.index;

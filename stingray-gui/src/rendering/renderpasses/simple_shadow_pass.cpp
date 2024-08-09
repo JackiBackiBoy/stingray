@@ -72,6 +72,28 @@ namespace sr::simpleshadowpass {
 			g_Initialized = true;
 		}
 
+		// Update shadow UBO data
+		// TODO: Make light direction dynamic
+		const glm::vec3 lightDir = normalize(glm::vec3(1.0f, 3.0f, -2.0f));
+		const float projectionArea = 5.0f;
+		const glm::mat4 lightProjection = glm::ortho(
+			-projectionArea,
+			projectionArea,
+			-projectionArea,
+			projectionArea,
+			0.01f,
+			10.0f
+		);
+		const glm::mat4 lightView = glm::lookAt(
+			lightDir * 3.0f,
+			{ 0.0f, 0.0f, 0.0f },
+			{ 0.0f, 1.0f, 0.0f }
+		);
+
+		g_ShadowUBOData.lightSpaceMatrix = lightProjection * lightView;
+		std::memcpy(g_ShadowUBOs[device.getBufferIndex()].mappedData, &g_ShadowUBOData, sizeof(g_ShadowUBOData));
+
+		// Rendering
 		device.bindPipeline(g_Pipeline, cmdList);
 		device.bindResource(g_ShadowUBOs[device.getBufferIndex()], "g_ShadowUBO", g_Pipeline, cmdList);
 

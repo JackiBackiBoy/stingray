@@ -3,13 +3,14 @@
 #include <algorithm>
 #include <chrono>
 
+#include "../input/input.hpp"
+
 #include "../rendering/renderpasses/accumulation_pass.hpp"
+#include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 #include "../rendering/renderpasses/gbuffer_pass.hpp"
 #include "../rendering/renderpasses/rtao_pass.hpp"
-#include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
+#include "../rendering/renderpasses/simple_shadow_pass.hpp"
 #include "../rendering/renderpasses/ui_pass.hpp"
-
-#include "../input/input.hpp"
 
 #if defined(SR_WINDOWS)
 	#include "../rendering/dx12/device_dx12.hpp"
@@ -179,6 +180,13 @@ namespace sr {
 			sr::gbufferpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
 		});
 
+		const uint32_t shadowMapDim = 2048;
+		auto& simpleShadowPass = m_RenderGraph->addPass("SimpleShadowPass");
+		simpleShadowPass.addOutputAttachment("ShadowMap", { AttachmentType::DEPTH_STENCIL, shadowMapDim, shadowMapDim, 1, Format::D16_UNORM });
+		simpleShadowPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::simpleshadowpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+		});
+
 		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
 		rtaoPass.addInputAttachment("Position");
 		rtaoPass.addInputAttachment("Normal");
@@ -198,6 +206,7 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("Position");
 		fullscreenTriPass.addInputAttachment("Albedo");
 		fullscreenTriPass.addInputAttachment("Normal");
+		fullscreenTriPass.addInputAttachment("ShadowMap");
 		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
 		fullscreenTriPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
@@ -208,6 +217,7 @@ namespace sr {
 		uiPass.addInputAttachment("Position");
 		uiPass.addInputAttachment("Albedo");
 		uiPass.addInputAttachment("Normal");
+		uiPass.addInputAttachment("ShadowMap");
 		uiPass.addInputAttachment("AmbientOcclusion");
 		uiPass.addInputAttachment("AOAccumulation");
 		uiPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
