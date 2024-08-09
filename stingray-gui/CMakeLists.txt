@@ -4,7 +4,8 @@ project(stingray-gui LANGUAGES CXX)
 
 # Dependency paths
 set(FREETYPE_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/freetype/include/)
-set(DX12_AGILITY_SDK_DIR ${CMAKE_HOME_DIRECTORY}/vendor/agility_sdk/)
+set(DXSDK_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxsdk/include/)
+set(DXSDK_BIN_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxsdk/bin/)
 set(DXC_INCLUDE_DIR ${CMAKE_HOME_DIRECTORY}/vendor/dxc/include/)
 set(DXCOMPILER_DLL_PATH ${CMAKE_HOME_DIRECTORY}/vendor/dxc/binaries/dxcompiler.dll)
 set(DXIL_DLL_PATH ${CMAKE_HOME_DIRECTORY}/vendor/dxc/binaries/dxil.dll)
@@ -45,6 +46,7 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/core/application.hpp
     ${SOURCE_DIR}/core/enum_flags.hpp
     ${SOURCE_DIR}/core/frame_info.hpp
+    ${SOURCE_DIR}/core/settings.hpp
     ${SOURCE_DIR}/core/utilities.cpp
     ${SOURCE_DIR}/core/utilities.hpp
     ${SOURCE_DIR}/core/window.hpp
@@ -58,11 +60,12 @@ set(SOURCE_FILES
     
     # Input
     ${SOURCE_DIR}/input/keycode.hpp
-    ${SOURCE_DIR}/input/rawinput.cpp
-    ${SOURCE_DIR}/input/rawinput.hpp
+    ${SOURCE_DIR}/input/input.hpp
+    ${SOURCE_DIR}/input/mousebutton.hpp
 
     # Math
     ${SOURCE_DIR}/math/quat.hpp
+    ${SOURCE_DIR}/math/sr_math.hpp
 
     # Managers
     ${SOURCE_DIR}/managers/asset_manager.cpp
@@ -83,6 +86,8 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/rendering/renderpasses/gbuffer_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/simple_shadow_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/simple_shadow_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.hpp
 
@@ -104,8 +109,10 @@ if (WIN32)
         ${SOURCE_DIR}/windows/window_win32.cpp
         ${SOURCE_DIR}/windows/window_win32.hpp
 
+        # Input
+        ${SOURCE_DIR}/input/windows/input_win32.cpp
+
         # DirectX 12
-        ${SOURCE_DIR}/rendering/dx12/d3dx12.h
         ${SOURCE_DIR}/rendering/dx12/device_dx12.cpp
         ${SOURCE_DIR}/rendering/dx12/device_dx12.hpp
         ${SOURCE_DIR}/rendering/dx12/graphics_dx12.hpp
@@ -122,6 +129,7 @@ if (WIN32)
         SR_WINDOWS
         NOMINMAX
         WIN32_LEAN_AND_MEAN
+
         UNICODE
         _UNICODE
         GLM_FORCE_LEFT_HANDED
@@ -130,6 +138,7 @@ if (WIN32)
     )
 
     target_include_directories(stingray-gui PRIVATE
+        ${DXSDK_INCLUDE_DIR}
         ${DXC_INCLUDE_DIR}
         ${GLM_INCLUDE_DIR}
         ${FREETYPE_INCLUDE_DIR}
@@ -150,7 +159,7 @@ if (WIN32)
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${DX12_AGILITY_SDK_DIR}$<CONFIG>/D3D12"
+            "${DXSDK_BIN_DIR}"
             "$<TARGET_FILE_DIR:${PROJECT_NAME}>/D3D12"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${DXCOMPILER_DLL_PATH}

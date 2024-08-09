@@ -60,7 +60,7 @@ namespace sr {
 
 		size_t passIndex = m_Passes.size();
 		m_PassIndexLUT.insert({ name, passIndex });
-		m_Passes.push_back(std::make_unique<RenderPass>(*this, passIndex));
+		m_Passes.push_back(std::make_unique<RenderPass>(*this, passIndex, name));
 
 		return *m_Passes.back();
 	}
@@ -83,7 +83,7 @@ namespace sr {
 			RenderPass& pass = *m_Passes[p];
 			auto& inputAttachments = pass.getInputAttachments();
 			auto& outputAttachments = pass.getOutputAttachments();
-			RenderPassInfo passInfo = {}; // general pass info to be sent to the device
+			PassInfo passInfo = {}; // general pass info to be sent to the device
 
 			// Root pass must use the swapchain backbuffer
 			if (encounteredFirstRootPass) {
@@ -151,11 +151,39 @@ namespace sr {
 
 			if (isRootPass) {
 				m_Device.beginRenderPass(swapChain, passInfo, cmdList, clearTargets);
+
+				const uint32_t width = swapChain.info.width;
+				const uint32_t height = swapChain.info.height;
+				const Viewport viewport = {
+					.topLeftX = 0.0f,
+					.topLeftY = 0.0f,
+					.width = static_cast<float>(width),
+					.height = static_cast<float>(height),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f
+				};
+
+				m_Device.bindViewport(viewport, cmdList);
+
 				pass.execute(m_Device, cmdList, frameInfo);
 				m_Device.endRenderPass(swapChain, cmdList);
 			}
 			else {
 				m_Device.beginRenderPass(passInfo, cmdList, clearTargets);
+
+				const uint32_t width = outputAttachments[0]->info.width;
+				const uint32_t height = outputAttachments[0]->info.height;
+				const Viewport viewport = {
+					.topLeftX = 0.0f,
+					.topLeftY = 0.0f,
+					.width = static_cast<float>(width),
+					.height = static_cast<float>(height),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f
+				};
+
+				m_Device.bindViewport(viewport, cmdList);
+
 				pass.execute(m_Device, cmdList, frameInfo);
 				m_Device.endRenderPass();
 			}

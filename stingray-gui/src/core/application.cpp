@@ -9,9 +9,10 @@
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 #include "../rendering/renderpasses/ui_pass.hpp"
 
+#include "../input/input.hpp"
+
 #if defined(SR_WINDOWS)
 	#include "../rendering/dx12/device_dx12.hpp"
-	#include "../input/rawinput.hpp"
 #endif
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -53,13 +54,13 @@ namespace sr {
 		bool firstFrame = true;
 		while (!m_Window->shouldClose()) {
 			m_Window->pollEvents();
-			sr::rawinput::update();
 
 			static auto lastTime = std::chrono::high_resolution_clock::now();
 			const auto currentTime = std::chrono::high_resolution_clock::now();
-
-			m_FrameInfo.dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
+			const float dt = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastTime).count();
 			lastTime = currentTime;
+
+			m_FrameInfo.dt = dt;
 			m_FrameInfo.cameraMoved = false;
 			m_FrameInfo.width = static_cast<uint32_t>(m_Width);
 			m_FrameInfo.height = static_cast<uint32_t>(m_Height);
@@ -67,7 +68,7 @@ namespace sr {
 			update(m_FrameInfo);
 			render(m_FrameInfo);
 
-			// Show the window once ONE frame has been generated
+			// Show the window when ONE frame has been generated
 			if (firstFrame) {
 				m_Window->show();
 				firstFrame = false;
@@ -84,7 +85,7 @@ namespace sr {
 	}
 
 	void Application::preInitialize() {
-		sr::rawinput::initialize();
+		sr::input::initialize();
 
 		const uint32_t uWidth = static_cast<uint32_t>(m_Width);
 		const uint32_t uHeight = static_cast<uint32_t>(m_Height);
@@ -100,7 +101,7 @@ namespace sr {
 		};
 
 		// TODO: Only works on windows, we'll fix this later
-		m_Device->createSwapChain(swapChainInfo, m_SwapChain, (HWND)m_Window->getHandle());
+		m_Device->createSwapChain(swapChainInfo, m_SwapChain, m_Window->getHandle());
 
 		// Default textures
 		const TextureInfo defaultAlbedoMapInfo = {
@@ -209,8 +210,8 @@ namespace sr {
 		uiPass.addInputAttachment("Normal");
 		uiPass.addInputAttachment("AmbientOcclusion");
 		uiPass.addInputAttachment("AOAccumulation");
-		uiPass.setExecuteCallback([](PassExecuteInfo& executeInfo) {
-			sr::uipass::onExecute(executeInfo);
+		uiPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
+			sr::uipass::onExecute(executeInfo, m_Settings);
 		});
 
 		m_RenderGraph->build();
@@ -260,6 +261,7 @@ namespace sr {
 		cornellWallBack->scale = glm::vec3(cornellScale);
 		cornellWallBack->model = &m_PlaneModel.getModel();
 		cornellWallBack->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(-90.0f));
+		cornellWallBack->color = { 0.229f, 0.531f, 0.0f };
 
 		m_SphereEntity = addEntity("Sphere");
 		m_SphereEntity->scale = glm::vec3(0.5f);
@@ -276,17 +278,18 @@ namespace sr {
 	}
 
 	void Application::update(FrameInfo& frameInfo) {
-		sr::rawinput::RawKeyboardState keyboard = {};
-		sr::rawinput::RawMouseState mouse = {};
+		sr::input::update();
+		sr::input::KeyboardState keyboard = {};
+		sr::input::MouseState mouse = {};
 
-		sr::rawinput::getKeyboardState(keyboard);
-		sr::rawinput::getMouseState(mouse);
+		sr::input::getKeyboardState(keyboard);
+		sr::input::getMouseState(mouse);
 
 		// Camera movement
 		Camera& camera = frameInfo.camera;
 		bool& cameraMoved = frameInfo.cameraMoved;
 		const float cameraMoveSpeed = 5.0f;
-		const float mouseSensitivity = 0.01f;
+		const float mouseSensitivity = 0.001f;
 
 		if (mouse.mouse3) {
 			if (mouse.deltaY != 0.0f) {
@@ -300,38 +303,38 @@ namespace sr {
 			}
 		}
 
-		if (mouse.wheelDelta != 0.0f) {
-			camera.verticalFOV = std::clamp(camera.verticalFOV - mouse.wheelDelta * 0.1f, glm::radians(5.0f), glm::radians(130.0f));
-			cameraMoved = true;
-		}
-
 		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
 		const glm::vec3 qUp = quatRotateVector(camera.orientation, { 0.0f, 1.0f, 0.0f });
 		const glm::vec3 qForward = quatRotateVector(camera.orientation, { 0.0f, 0.0f, 1.0f });
 
-		if (sr::rawinput::isDown(KeyCode::W)) {
+		if (sr::input::isDown(KeyCode::W)) {
 			camera.position += qForward * cameraMoveSpeed * frameInfo.dt;
 			cameraMoved = true;
 		}
-		if (sr::rawinput::isDown(KeyCode::A)) {
+		if (sr::input::isDown(KeyCode::A)) {
 			camera.position -= qRight * cameraMoveSpeed * frameInfo.dt;
 			cameraMoved = true;
 		}
-		if (sr::rawinput::isDown(KeyCode::S)) {
+		if (sr::input::isDown(KeyCode::S)) {
 			camera.position -= qForward * cameraMoveSpeed * frameInfo.dt;
 			cameraMoved = true;
 		}
-		if (sr::rawinput::isDown(KeyCode::D)) {
+		if (sr::input::isDown(KeyCode::D)) {
 			camera.position += qRight * cameraMoveSpeed * frameInfo.dt;
 			cameraMoved = true;
 		}
 
-		if (sr::rawinput::isDown(KeyCode::Space)) {
+		if (sr::input::isDown(KeyCode::Space)) {
 			camera.position.y += cameraMoveSpeed * frameInfo.dt;
 			cameraMoved = true;
 		}
-		if (sr::rawinput::isDown(KeyCode::LeftControl)) {
+		if (sr::input::isDown(KeyCode::LeftControl)) {
 			camera.position.y -= cameraMoveSpeed * frameInfo.dt;
+			cameraMoved = true;
+		}
+
+		if (camera.verticalFOV != glm::radians((float)m_Settings.verticalFOV)) {
+			camera.verticalFOV = glm::radians((float)m_Settings.verticalFOV);
 			cameraMoved = true;
 		}
 
@@ -351,12 +354,6 @@ namespace sr {
 	void Application::render(FrameInfo& frameInfo) {
 		CommandList cmdList = m_Device->beginCommandList(QueueType::DIRECT);
 		{
-			const Viewport viewport = {
-				.width = static_cast<float>(m_Width),
-				.height = static_cast<float>(m_Height),
-			};
-			m_Device->bindViewport(viewport, cmdList);
-
 			m_RenderGraph->execute(m_SwapChain, cmdList, m_FrameInfo);
 		}
 		m_Device->submitCommandLists(m_SwapChain);

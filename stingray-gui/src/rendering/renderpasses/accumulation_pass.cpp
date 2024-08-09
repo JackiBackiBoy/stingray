@@ -73,10 +73,10 @@ namespace sr::accumulationpass {
 
 		device.copyResource(&g_AccumulationTexture, &thisAttachment->texture, cmdList);
 
-		GPUBarrier postBarrier1 = GPUBarrier::imageBarrier(&thisAttachment->texture, ResourceState::COPY_SRC, ResourceState::RENDER_TARGET);
-		GPUBarrier postBarrier2 = GPUBarrier::imageBarrier(&g_AccumulationTexture, ResourceState::COPY_DST, ResourceState::SHADER_RESOURCE);
-		device.barrier(postBarrier1, cmdList);
-		device.barrier(postBarrier2, cmdList);
+		GPUBarrier postBarrier = GPUBarrier::imageBarrier(&g_AccumulationTexture, ResourceState::COPY_DST, ResourceState::SHADER_RESOURCE);
+		device.barrier(postBarrier, cmdList);
+
+		thisAttachment->currentState = ResourceState::COPY_SRC;
 	}
 
 }

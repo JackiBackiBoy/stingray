@@ -30,7 +30,7 @@ namespace sr {
 		GlyphData glyphs[128] = {};
 		Texture fontAtlasTexture = {};
 
-		int calcTextWidth(const std::string& text);
+		int calcTextWidth(const std::string& text) const;
 	};
 
 	namespace fontloader {

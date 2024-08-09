@@ -13,6 +13,7 @@ namespace sr {
 
 		inline virtual uint32_t getBufferIndex() const final { return m_BufferIndex; }
 		inline virtual uint64_t getFrameCount() const final { return m_FrameCount; }
+		inline virtual std::string getDeviceName() const final { return m_DeviceName; }
 
 		/* Resource Creation */
 		virtual void createBuffer(const BufferInfo& info, Buffer& buffer, const void* data) = 0;
@@ -21,16 +22,16 @@ namespace sr {
 		virtual void createShader(ShaderStage stage, const std::string& path, Shader& shader) = 0;
 		virtual void createSwapChain(const SwapChainInfo& info, SwapChain& swapChain, void* window) = 0;
 		virtual void createTexture(const TextureInfo& info, Texture& texture, const SubresourceData* data) = 0;
-		virtual void createShaderTable(const RayTracingPipeline& rtPipeline, Buffer& table, const std::string& exportName) = 0;
+		virtual void createShaderTable(const RTPipeline& rtPipeline, Buffer& table, const std::string& exportName) = 0;
 
 		/* Ray Tracing */
-		virtual void createRayTracingAS(const RayTracingASInfo& info, RayTracingAS& bvh) = 0;
-		virtual void buildRayTracingAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& cmdList) = 0;
+		virtual void createRTAS(const RayTracingASInfo& info, RayTracingAS& bvh) = 0;
+		virtual void buildRTAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& cmdList) = 0;
 		virtual void writeTLASInstance(const RayTracingTLAS::Instance& instance, void* dest) = 0;
-		virtual void createRayTracingPipeline(const RayTracingPipelineInfo& info, RayTracingPipeline& rtPipeline) = 0;
-		virtual void bindRayTracingPipeline(const RayTracingPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& cmdList) = 0;
-		virtual void bindRayTracingResource(const Resource& res, const std::string& name, const RayTracingPipeline& rtPipeline, const CommandList& cmdList) = 0;
-		virtual void createRayTracingInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) = 0;
+		virtual void createRTPipeline(const RTPipelineInfo& info, RTPipeline& rtPipeline) = 0;
+		virtual void bindRTPipeline(const RTPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& cmdList) = 0;
+		virtual void bindRTResource(const Resource& res, const std::string& name, const RTPipeline& rtPipeline, const CommandList& cmdList) = 0;
+		virtual void createRTInstanceBuffer(Buffer& buffer, uint32_t numBottomLevels) = 0;
 		virtual void dispatchRays(const DispatchRaysInfo& info, const CommandList& cmdList) = 0;
 
 		/* Resource binding */
@@ -47,8 +48,8 @@ namespace sr {
 
 		/* Commands and renderpasses */
 		virtual CommandList beginCommandList(QueueType type) = 0;
-		virtual void beginRenderPass(const SwapChain& swapChain, const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets = true) = 0;
-		virtual void beginRenderPass(const RenderPassInfo& renderPass, const CommandList& cmdList, bool clearTargets = true) = 0;
+		virtual void beginRenderPass(const SwapChain& swapChain, const PassInfo& renderPass, const CommandList& cmdList, bool clear = true) = 0;
+		virtual void beginRenderPass(const PassInfo& renderPass, const CommandList& cmdList, bool clearTargets = true) = 0;
 		virtual void endRenderPass(const SwapChain& swapChain, const CommandList& cmdList) = 0;
 		virtual void endRenderPass() = 0;
 		virtual void submitCommandLists(SwapChain& swapChain) = 0;
@@ -68,5 +69,6 @@ namespace sr {
 	protected:
 		uint32_t m_BufferIndex = 0;
 		uint64_t m_FrameCount = 0;
+		std::string m_DeviceName = {};
 	};
 }

@@ -6,4 +6,5 @@
 
 namespace sr::rtaopass {
 	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const std::vector<Entity*>& entities);
+	void destroy();
 }

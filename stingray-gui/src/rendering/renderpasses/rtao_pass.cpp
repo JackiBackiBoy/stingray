@@ -36,7 +36,7 @@ namespace sr::rtaopass {
 
 	static std::vector<std::unique_ptr<RayTracingAS>> g_RayTracingBLASes = {};
 	static RayTracingAS g_RayTracingTLAS = {};
-	static RayTracingPipeline g_RayTracingPipeline = {};
+	static RTPipeline g_RayTracingPipeline = {};
 	static bool g_Initialized = false;
 
 	static void createBLASes(GraphicsDevice& device, const std::vector<Entity*>& entities) {
@@ -51,7 +51,7 @@ namespace sr::rtaopass {
 
 		g_RayTracingBLASes.reserve(static_cast<size_t>(numBLASes));
 		g_TLASInstances.reserve(static_cast<size_t>(numBLASes));
-		device.createRayTracingInstanceBuffer(g_InstanceBuffer, numBLASes);
+		device.createRTInstanceBuffer(g_InstanceBuffer, numBLASes);
 
 		for (auto& entity : entities) {
 			// TODO: Add loop for sub-meshes per model
@@ -80,7 +80,7 @@ namespace sr::rtaopass {
 				triangles.indexCount = static_cast<uint32_t>(mesh.numIndices);
 				triangles.indexOffset = mesh.baseIndex;
 
-				device.createRayTracingAS(blas.info, blas);
+				device.createRTAS(blas.info, blas);
 
 				// Store the TLAS instance data (will be written to the actual TLAS later)
 				RayTracingTLAS::Instance instance = {
@@ -112,7 +112,7 @@ namespace sr::rtaopass {
 			}
 		};
 
-		device.createRayTracingAS(rtTLASInfo, g_RayTracingTLAS);
+		device.createRTAS(rtTLASInfo, g_RayTracingTLAS);
 	}
 
 	static void writeTLASInstances(GraphicsDevice& device, const std::vector<Entity*>& entities) {
@@ -131,7 +131,7 @@ namespace sr::rtaopass {
 		device.createShader(ShaderStage::LIBRARY, "assets/shaders/rtao.hlsl", g_RayTracingShaderLibrary);
 
 		// Pipeline
-		const RayTracingPipelineInfo rtPipelineInfo = {
+		const RTPipelineInfo rtPipelineInfo = {
 			.shaderLibraries = {
 				RayTracingShaderLibrary { RayTracingShaderLibrary::Type::RAYGENERATION, &g_RayTracingShaderLibrary, "MyRaygenShader" },
 				RayTracingShaderLibrary { RayTracingShaderLibrary::Type::CLOSESTHIT, &g_RayTracingShaderLibrary, "MyClosestHitShader" },
@@ -143,7 +143,7 @@ namespace sr::rtaopass {
 			.payloadSize = 4 * sizeof(float) // payload: color
 		};
 
-		device.createRayTracingPipeline(rtPipelineInfo, g_RayTracingPipeline);
+		device.createRTPipeline(rtPipelineInfo, g_RayTracingPipeline);
 
 		// Shader tables
 		device.createShaderTable(g_RayTracingPipeline, g_RayGenShaderTable, "MyRaygenShader");
@@ -198,6 +198,10 @@ namespace sr::rtaopass {
 	}
 
 	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+		if (entities.empty()) {
+			return;
+		}
+
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
 		const CommandList& cmdList = *executeInfo.cmdList;
@@ -210,13 +214,13 @@ namespace sr::rtaopass {
 		static bool builtAS = false;
 		if (!builtAS) {
 			for (auto& blas : g_RayTracingBLASes) {
-				device.buildRayTracingAS(*blas, nullptr, cmdList);
+				device.buildRTAS(*blas, nullptr, cmdList);
 
 				const GPUBarrier barrierBLAS = { .type = GPUBarrier::Type::UAV, .uav = { blas.get() } };
 				device.barrier(barrierBLAS, cmdList);
 			}
 
-			device.buildRayTracingAS(g_RayTracingTLAS, nullptr, cmdList);
+			device.buildRTAS(g_RayTracingTLAS, nullptr, cmdList);
 			builtAS = true;
 		}
 
@@ -224,11 +228,11 @@ namespace sr::rtaopass {
 		auto positionAttachment = graph.getAttachment("Position");
 		auto normalAttachment = graph.getAttachment("Normal");
 
-		device.bindRayTracingPipeline(g_RayTracingPipeline, rtOutputAttachment->texture, cmdList);
-		device.bindRayTracingResource(g_RayTracingTLAS, "Scene", g_RayTracingPipeline, cmdList);
+		device.bindRTPipeline(g_RayTracingPipeline, rtOutputAttachment->texture, cmdList);
+		device.bindRTResource(g_RayTracingTLAS, "Scene", g_RayTracingPipeline, cmdList);
 		//device.bindRayTracingResource(perFrameUBO, "g_PerFrameData", g_RayTracingPipeline, cmdList);
-		device.bindRayTracingResource(g_GeometryInfoBuffer, "g_GeometryInfo", g_RayTracingPipeline, cmdList);
-		device.bindRayTracingResource(g_MaterialInfoBuffer, "g_MaterialInfo", g_RayTracingPipeline, cmdList);
+		device.bindRTResource(g_GeometryInfoBuffer, "g_GeometryInfo", g_RayTracingPipeline, cmdList);
+		device.bindRTResource(g_MaterialInfoBuffer, "g_MaterialInfo", g_RayTracingPipeline, cmdList);
 
 		const PushConstant pushConstant = {
 			.gBufferPositionIndex = device.getDescriptorIndex(positionAttachment->texture),
@@ -249,4 +253,9 @@ namespace sr::rtaopass {
 
 		device.dispatchRays(dispatchRaysInfo, cmdList);
 	}
+
+	void destroy() {
+
+	}
+
 }

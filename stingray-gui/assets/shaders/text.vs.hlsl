@@ -2,6 +2,7 @@ struct VSOutput {
     float4 position : SV_Position;
     float4 color : COLOR;
     float2 texCoord : TEXCOORD0;
+    uint texIndex : TEXINDEX;
 };
 
 struct TextParams {
@@ -9,6 +10,10 @@ struct TextParams {
     float2 position;
     float2 size;
     float2 texCoords[4];
+    uint texIndex;
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 struct PerFrameData {
@@ -21,10 +26,6 @@ struct PerFrameData {
 
 struct PushConstant {
     float4x4 uiProjection;
-    uint texIndex;
-    uint pad1;
-    uint pad2;
-    uint pad3;
 };
 
 StructuredBuffer<TextParams> g_TextParamsBuffer : register(t0, space101);
@@ -55,6 +56,7 @@ VSOutput main(uint VertexID : SV_VertexID, uint InstanceID : SV_InstanceID) {
     output.position = mul(pushConstant.uiProjection, float4(position, 0.0, 1.0));
     output.color = textParam.color;
     output.texCoord = textParam.texCoords[vertexIndex];
+    output.texIndex = textParam.texIndex;
 
     return output;
 }

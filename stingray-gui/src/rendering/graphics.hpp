@@ -26,9 +26,10 @@ namespace sr {
 		SHADING_RATE = 1 << 7,
 	};
 
-	enum class QueueType {
+	enum QueueType {
 		DIRECT,
 		COPY,
+		COMPUTE,
 
 		QUEUE_COUNT
 	};
@@ -223,7 +224,7 @@ namespace sr {
 		NV12,				// video YUV420; SRV Luminance aspect: R8_UNORM, SRV Chrominance aspect: R8G8_UNORM
 	};
 
-	enum class InputClassification {
+	enum class InputClass {
 		PER_VERTEX_DATA,
 		PER_INSTANCE_DATA,
 	};
@@ -245,7 +246,7 @@ namespace sr {
 		COPY_DST = 1 << 6, // copy to
 	};
 
-	enum class SamplerBorderColor {
+	enum class BorderColor {
 		TRANSPARENT_BLACK,
 		OPAQUE_BLACK,
 		OPAQUE_WHITE,
@@ -332,7 +333,7 @@ namespace sr {
 		struct Element {
 			std::string name = "";
 			Format format = Format::UNKNOWN;
-			InputClassification inputClassification = InputClassification::PER_VERTEX_DATA;
+			InputClass inputClassification = InputClass::PER_VERTEX_DATA;
 		};
 
 		std::vector<Element> elements = {};
@@ -462,15 +463,15 @@ namespace sr {
 		uint32_t intersectionShader = ~0u;
 	};
 
-	struct RayTracingPipelineInfo {
+	struct RTPipelineInfo {
 		std::vector<RayTracingShaderLibrary> shaderLibraries = {};
 		std::vector<RayTracingShaderHitGroup> hitGroups = {};
 		uint32_t payloadSize = 0;
 		// TODO: Add more
 	};
 
-	struct RayTracingPipeline {
-		RayTracingPipelineInfo info = {};
+	struct RTPipeline {
+		RTPipelineInfo info = {};
 		std::shared_ptr<void> internalState = nullptr;
 	};
 
@@ -563,7 +564,7 @@ namespace sr {
 		}
 	};
 
-	struct RenderPassInfo {
+	struct PassInfo {
 		const Texture* colors[8] = { nullptr };
 		uint32_t numColorAttachments = 0;
 		const Texture* depth = nullptr;
@@ -577,7 +578,7 @@ namespace sr {
 		float mipLODBias = 0;
 		uint32_t maxAnisotropy = 0;
 		ComparisonFunc comparisonFunc = ComparisonFunc::NEVER;
-		SamplerBorderColor borderColor = SamplerBorderColor::TRANSPARENT_BLACK;
+		BorderColor borderColor = BorderColor::TRANSPARENT_BLACK;
 		float minLOD = 0;
 		float maxLOD = std::numeric_limits<float>::max();
 	};

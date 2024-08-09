@@ -1,5 +1,7 @@
 #include "core/application.hpp"
 
+#include <Windows.h>
+
 using namespace sr;
 
 class Sandbox final : public Application {
@@ -19,7 +21,12 @@ private:
 };
 
 #ifdef SR_WINDOWS
-int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+int APIENTRY wWinMain(
+	HINSTANCE hInstance,
+	HINSTANCE hPrevInstance,
+	LPWSTR lpCmdLine,
+	int nCmdShow) {
+
 	Sandbox* sandbox = new Sandbox();
 	sandbox->run();
 

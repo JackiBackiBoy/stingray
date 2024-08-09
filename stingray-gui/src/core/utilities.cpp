@@ -11,4 +11,12 @@ namespace sr::utilities {
 		return ws;
 	}
 
+	std::string wStringToString(const std::wstring wString) {
+		std::string s(wString.size(), ' ');
+
+		s.resize(std::wcstombs(&s[0], wString.c_str(), s.size()));
+
+		return s;
+	}
+
 }

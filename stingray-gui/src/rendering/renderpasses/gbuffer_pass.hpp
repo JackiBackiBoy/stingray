@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../device.hpp"
 #include "../render_graph.hpp"
 #include "../../data/entity.hpp"
 

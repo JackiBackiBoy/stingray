@@ -45,13 +45,15 @@ namespace sr {
 
 	class RenderPass {
 	public:
-		RenderPass(RenderGraph& renderGraph, unsigned int index) : m_Graph(renderGraph), m_Index(index) {}
+		RenderPass(RenderGraph& renderGraph, unsigned int index, const std::string& name) :
+			m_Graph(renderGraph), m_Index(index), m_Name(name) {}
 		~RenderPass();
 
 		RenderPassAttachment& addInputAttachment(const std::string& name);
 		RenderPassAttachment& addOutputAttachment(const std::string& name, const AttachmentInfo& info);
 		void execute(GraphicsDevice& device, const CommandList& cmdList, const FrameInfo& frameInfo);
 
+		inline std::string getName() const { return m_Name; }
 		inline std::vector<RenderPassAttachment*>& getInputAttachments() { return m_InputAttachments; }
 		inline std::vector<RenderPassAttachment*>& getOutputAttachments() { return m_OutputAttachments; }
 
@@ -62,6 +64,7 @@ namespace sr {
 	private:
 		RenderGraph& m_Graph;
 		unsigned int m_Index;
+		std::string m_Name;
 		std::function<void(PassExecuteInfo& executeInfo)> m_ExecuteCallback;
 
 		std::vector<RenderPassAttachment*> m_OutputAttachments = {};
@@ -79,6 +82,7 @@ namespace sr {
 		void execute(SwapChain& swapChain, const CommandList& cmdList, const FrameInfo& frameInfo);
 
 		RenderPassAttachment* getAttachment(const std::string& name);
+		inline const std::vector<std::unique_ptr<RenderPass>>& getPasses() const { return m_Passes; }
 
 	private:
 		void recurseBuild(unsigned int index);

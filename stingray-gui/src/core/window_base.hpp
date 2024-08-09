@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 
 #include "enum_flags.hpp"
 

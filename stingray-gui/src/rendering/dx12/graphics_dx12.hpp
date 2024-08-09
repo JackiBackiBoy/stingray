@@ -2,9 +2,11 @@
 
 #include "../graphics.hpp"
 
-#include <d3d12.h>
+#include "dxsdk/d3dx12.h"
+#include <dxgi.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
+
 #include "dxc/dxcapi.h"
 
 #include <string>
@@ -14,6 +16,25 @@
 using namespace Microsoft::WRL;
 
 namespace sr {
+	struct Resource_DX12 {
+		D3D12_GPU_VIRTUAL_ADDRESS gpuAddress = 0;
+		ComPtr<ID3D12Resource> resource = nullptr;
+	};
+
+	struct CommandList_DX12 {
+		QueueType type = {};
+		ComPtr<ID3D12CommandList> cmdList = nullptr;
+
+		inline ID3D12GraphicsCommandList4* getGraphicsCommandList() {
+			return (ID3D12GraphicsCommandList4*)cmdList.Get();
+		}
+	};
+
+	struct CommandQueue_DX12 {
+		ComPtr<ID3D12CommandQueue> commandQueue = nullptr;
+		std::vector<ID3D12CommandList*> submittedCommandLists = {};
+	};
+
 	struct Pipeline_DX12 {
 		PipelineInfo info = {};
 		ComPtr<ID3D12PipelineState> pipelineState = nullptr;
@@ -24,6 +45,10 @@ namespace sr {
 	};
 
 	struct RayTracingPipeline_DX12 {
+		~RayTracingPipeline_DX12() {
+
+		}
+
 		ComPtr<ID3D12StateObject> pso = nullptr;
 		ComPtr<ID3D12RootSignature> rootSignature = nullptr;
 
@@ -49,7 +74,7 @@ namespace sr {
 	};
 
 	/* ------ Converter Functions ------ */
-	constexpr D3D12_BLEND convertBlend(Blend value) {
+	constexpr D3D12_BLEND toDX12Blend(Blend value) {
 		switch (value) {
 		case Blend::ZERO:
 			return D3D12_BLEND_ZERO;
@@ -90,7 +115,7 @@ namespace sr {
 		}
 	}
 
-	constexpr D3D12_BLEND convertAlphaBlend(Blend value) {
+	constexpr D3D12_BLEND toDX12AlphaBlend(Blend value) {
 		switch (value) {
 		case Blend::SRC_COLOR:
 			return D3D12_BLEND_SRC_ALPHA;
@@ -105,11 +130,11 @@ namespace sr {
 		case Blend::INV_SRC1_COLOR:
 			return D3D12_BLEND_INV_SRC1_ALPHA;
 		default:
-			return convertBlend(value);
+			return toDX12Blend(value);
 		}
 	}
 
-	constexpr D3D12_BLEND_OP convertBlendOp(BlendOp value) {
+	constexpr D3D12_BLEND_OP toDX12BlendOp(BlendOp value) {
 		switch (value) {
 		case BlendOp::ADD:
 			return D3D12_BLEND_OP_ADD;
@@ -126,7 +151,7 @@ namespace sr {
 		}
 	}
 
-	constexpr D3D12_COMMAND_LIST_TYPE convertCommandListType(QueueType type) {
+	constexpr D3D12_COMMAND_LIST_TYPE toDX12CommandListType(QueueType type) {
 		switch (type) {
 		case QueueType::DIRECT:
 			return D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -137,7 +162,7 @@ namespace sr {
 		return D3D12_COMMAND_LIST_TYPE_DIRECT; // TODO: Remove
 	}
 
-	constexpr D3D12_COMPARISON_FUNC convertComparisonFunc(ComparisonFunc value) {
+	constexpr D3D12_COMPARISON_FUNC toDX12ComparisonFunc(ComparisonFunc value) {
 		switch (value) {
 		case ComparisonFunc::NEVER:
 			return D3D12_COMPARISON_FUNC_NEVER;
@@ -160,7 +185,7 @@ namespace sr {
 		}
 	}
 
-	constexpr D3D12_FILL_MODE convertFillMode(FillMode value) {
+	constexpr D3D12_FILL_MODE toDX12FillMode(FillMode value) {
 		switch (value) {
 		case FillMode::SOLID:
 			return D3D12_FILL_MODE_SOLID;
@@ -169,7 +194,7 @@ namespace sr {
 		}
 	}
 
-	constexpr D3D12_CULL_MODE convertCullMode(CullMode value) {
+	constexpr D3D12_CULL_MODE toDX12CullMode(CullMode value) {
 		switch (value) {
 		case CullMode::FRONT:
 			return D3D12_CULL_MODE_FRONT;
@@ -180,7 +205,7 @@ namespace sr {
 		}
 	}
 
-	constexpr D3D12_FILTER convertFilter(Filter value) {
+	constexpr D3D12_FILTER toDX12Filter(Filter value) {
 		switch (value) {
 		case Filter::MIN_MAG_MIP_POINT:
 			return D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -259,7 +284,7 @@ namespace sr {
 		}
 	}
 
-	constexpr DXGI_FORMAT convertFormat(Format value) {
+	constexpr DXGI_FORMAT toDX12Format(Format value) {
 		switch (value) {
 		case Format::UNKNOWN:
 			return DXGI_FORMAT_UNKNOWN;
@@ -397,20 +422,21 @@ namespace sr {
 		return DXGI_FORMAT_UNKNOWN;
 	}
 
-	constexpr D3D12_INPUT_CLASSIFICATION convertInputClassification(InputClassification value) {
+	constexpr D3D12_INPUT_CLASSIFICATION toDX12InputClass(InputClass value) {
 		switch (value) {
-		case InputClassification::PER_INSTANCE_DATA:
+		case InputClass::PER_INSTANCE_DATA:
 			return D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
 		default:
 			return D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
 		}
 	}
 
-	constexpr D3D12_RESOURCE_STATES convertResourceState(ResourceState value) {
-		D3D12_RESOURCE_STATES state = {};
+	constexpr D3D12_RESOURCE_STATES toDX12ResourceState(ResourceState value) {
+		D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
 
 		if (has_flag(value, ResourceState::SHADER_RESOURCE)) {
-			state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+					D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		}
 		if (has_flag(value, ResourceState::UNORDERED_ACCESS)) {
 			state |= D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -435,20 +461,20 @@ namespace sr {
 		return state;
 	}
 
-	constexpr D3D12_STATIC_BORDER_COLOR convertSamplerBorderColor(SamplerBorderColor value) {
+	constexpr D3D12_STATIC_BORDER_COLOR toDX12BorderColor(BorderColor value) {
 		switch (value) {
-		case SamplerBorderColor::TRANSPARENT_BLACK:
+		case BorderColor::TRANSPARENT_BLACK:
 			return D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		case SamplerBorderColor::OPAQUE_BLACK:
+		case BorderColor::OPAQUE_BLACK:
 			return D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-		case SamplerBorderColor::OPAQUE_WHITE:
+		case BorderColor::OPAQUE_WHITE:
 			return D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE;
 		default:
 			return D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
 		}
 	}
 
-	constexpr D3D12_TEXTURE_ADDRESS_MODE convertTextureAddressMode(TextureAddressMode value) {
+	constexpr D3D12_TEXTURE_ADDRESS_MODE toDX12TextureAddressMode(TextureAddressMode value) {
 		switch (value) {
 		case TextureAddressMode::WRAP:
 			return D3D12_TEXTURE_ADDRESS_MODE_WRAP;

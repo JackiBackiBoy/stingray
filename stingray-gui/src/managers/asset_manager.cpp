@@ -7,8 +7,6 @@
 #include "../utility/tiny_gltf.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <Windows.h>
-
 namespace sr {
 	enum class DataType {
 		UNKNOWN,
@@ -25,8 +23,8 @@ namespace sr {
 	};
 
 	namespace assetmanager {
-		static std::unordered_map<std::string, std::weak_ptr<AssetInternal>> g_Assets;
-		static tinygltf::TinyGLTF g_GltfLoader{};
+		static std::unordered_map<std::string, std::weak_ptr<AssetInternal>> g_Assets = {};
+		static tinygltf::TinyGLTF g_GltfLoader = {};
 
 		static const std::unordered_map<std::string, DataType> g_Types = {
 			{ "BASIS", DataType::IMAGE },

@@ -9,7 +9,7 @@
 
 namespace sr {
 
-	int Font::calcTextWidth(const std::string& text) {
+	int Font::calcTextWidth(const std::string& text) const {
 		// Edge case
 		if (text.length() == 1) {
 			return glyphs[text[0]].width;
@@ -17,7 +17,7 @@ namespace sr {
 
 		int result = 0;
 		for (size_t i = 0; i < text.length(); ++i) {
-			GlyphData& glyphData = glyphs[text[i]];
+			const GlyphData& glyphData = glyphs[text[i]];
 
 			// For the last character we want its full width including bearing
 			if (i == text.length() - 1) {

@@ -2,8 +2,10 @@
 
 #include "../../data/font.hpp"
 #include "../../managers/asset_manager.hpp"
+#include "../../math/sr_math.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <unordered_map>
@@ -26,6 +28,10 @@ namespace sr::uipass {
 		glm::vec2 position = {};
 		glm::vec2 size = {};
 		glm::vec2 texCoords[4] = {};
+		uint32_t texIndex = 0;
+		uint32_t pad1;
+		uint32_t pad2;
+		uint32_t pad3;
 	};
 
 	struct UIParams {
@@ -41,10 +47,6 @@ namespace sr::uipass {
 
 	struct TextPushConstant {
 		glm::mat4 uiProjection = { 1.0f };
-		uint32_t texIndex = 0;
-		uint32_t pad1;
-		uint32_t pad2;
-		uint32_t pad3;
 	};
 
 	struct UIPushConstant {
@@ -81,23 +83,27 @@ namespace sr::uipass {
 	static bool g_SameLineActive = false;
 	static bool g_Initialized = false;
 
-	void drawText(const std::string& text, const glm::vec2& pos, const glm::vec4 color, const Font& font, UIPosFlag posFlags = UIPosFlag::NONE) {
+	void drawText(const std::string& text, const glm::vec2& pos, const glm::vec4 color, const Font* font, UIPosFlag posFlags = UIPosFlag::NONE) {
 		float textPosX = pos.x;
 		float textPosY = pos.y;
 
 		const float textPosOriginX = textPosX;
 		const float textPosOriginY = textPosY;
 
+		if (font == nullptr) {
+			font = &g_DefaultFont;
+		}
+
 		if (has_flag(posFlags, UIPosFlag::HCENTER)) {
-			textPosX -= (float)(g_DefaultFont.calcTextWidth(text) / 2);
+			textPosX -= (float)(font->calcTextWidth(text) / 2);
 		}
 		if (has_flag(posFlags, UIPosFlag::VCENTER)) {
-			textPosY -= (float)(g_DefaultFont.maxBearingY / 2);
+			textPosY -= (float)(font->maxBearingY / 2);
 		}
 
 		for (size_t i = 0; i < text.length(); ++i) {
 			const char character = text[i];
-			const GlyphData& glyphData = font.glyphs[character];
+			const GlyphData& glyphData = font->glyphs[character];
 
 			if (character == ' ') {
 				textPosX += glyphData.advanceX;
@@ -106,25 +112,26 @@ namespace sr::uipass {
 
 			if (character == '\n') {
 				textPosX = textPosOriginX;
-				textPosY += font.lineSpacing;
+				textPosY += font->lineSpacing;
 			}
 
 			TextParams textParams = {};
 			textParams.color = color;
 			textParams.position.x = i == 0 ? textPosX : textPosX + glyphData.bearingX; // Only use bearing if it's not the first character
-			textParams.position.y = textPosY + (font.maxBearingY - glyphData.bearingY);
+			textParams.position.y = textPosY + (font->maxBearingY - glyphData.bearingY);
 			textParams.size = { glyphData.width, glyphData.height };
 			textParams.texCoords[0] = glyphData.texCoords[0];
 			textParams.texCoords[1] = glyphData.texCoords[1];
 			textParams.texCoords[2] = glyphData.texCoords[2];
 			textParams.texCoords[3] = glyphData.texCoords[3];
+			textParams.texIndex = g_Device->getDescriptorIndex(font->fontAtlasTexture);
 			g_TextParamsData.push_back(textParams);
 
 			textPosX += glyphData.advanceX;
 		}
 	}
 
-	void drawRect(const glm::vec2& pos, int width, int height, glm::vec4 color, const Texture* texture) {
+	void drawRect(const glm::vec2& pos, int width, int height, glm::vec4 color, const Texture* texture = nullptr) {
 		if (g_Device == nullptr) {
 			return;
 		}
@@ -147,10 +154,10 @@ namespace sr::uipass {
 		g_UIParamsData.push_back(uiParams);
 	}
 
-	static void initialize(GraphicsDevice& device, RenderGraph& renderGraph, const FrameInfo& frameInfo) {
+	static void initialize(GraphicsDevice& device, RenderGraph& renderGraph, const FrameInfo& frameInfo, Settings& settings) {
 		g_Device = &device;
 		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 14, g_DefaultFont, device);
-		//sr::fontloader::loadFromFile("assets/fonts/segoeuib.ttf", 14, g_DefaultBoldFont, device);
+		sr::fontloader::loadFromFile("assets/fonts/segoeuib.ttf", 14, g_DefaultBoldFont, device);
 
 		// Text pipeline
 		device.createShader(ShaderStage::VERTEX, "assets/shaders/text.vs.hlsl", g_TextVertexShader);
@@ -222,37 +229,48 @@ namespace sr::uipass {
 
 		// UI
 		g_CursorOrigin = { 0, 31 };
-		auto mainLayout = createLayout(2, 2, frameInfo.width, frameInfo.height - 31);
-		auto leftLayout = createLayout(8, 1, frameInfo.width / 8, frameInfo.height - 31, 0, mainLayout);
+		auto mainLayout = createLayout(8, 8, frameInfo.width, frameInfo.height - 31);
+		auto leftLayout = createLayout(7, 1, frameInfo.width / 7, frameInfo.height - 31, 0, mainLayout);
 
 		auto statsLayout = createLayout(5, 1, 0, 0, 8, leftLayout);
 		statsLayout->backgroundColor = UI_COLOR_PRIMARY1;
-		auto statsTitle = createLabel("Statistics:", statsLayout);
+		auto statsTitle = createLabel("Info & Statistics", statsLayout, &g_DefaultBoldFont);
 		g_FPSCounterLabel = createLabel("FPS: ", statsLayout);
+		auto gpuLabel = createLabel("GPU: " + device.getDeviceName(), statsLayout, &g_DefaultFont);
 
-		auto settingsLayout = createLayout(5, 1, 0, 0, 8, leftLayout);
+		auto settingsLayout = createLayout(6, 1, 0, 200, 8, leftLayout);
 		settingsLayout->backgroundColor = UI_COLOR_PRIMARY1;
-		auto settingsTitle = createLabel("Settings:", settingsLayout);
-		auto checkbox1 = createCheckBox("Draw Wireframe", true, settingsLayout);
-		auto checkbox2 = createCheckBox("Ambient Occlusion", true, settingsLayout);
-		auto checkbox3 = createCheckBox("Shadows", true, settingsLayout);
+		auto settingsTitle = createLabel("Settings", settingsLayout, &g_DefaultBoldFont);
+		auto checkbox1 = createCheckBox("Draw Wireframe", nullptr, settingsLayout);
+		auto checkbox2 = createCheckBox("Ambient Occlusion", &settings.enableAO, settingsLayout);
+		auto checkbox3 = createCheckBox("Shadows", &settings.enableShadows, settingsLayout);
+		auto fovSlider = createSliderInt("Vertical FOV", 137, 20, 5, 130, &settings.verticalFOV, settingsLayout);
+
+		auto renderPassesLayout = createLayout(3, 3, 0, 0, 8, leftLayout);
+		renderPassesLayout->backgroundColor = UI_COLOR_PRIMARY1;
+		auto renderPassesTitle = createLabel("Renderpasses", renderPassesLayout, &g_DefaultBoldFont);
+
+		for (const auto& pass : renderGraph.getPasses()) {
+			createLabel(" - " + pass->getName(), renderPassesLayout, &g_DefaultFont);
+		}
+
 
 		// Renderpass overview
-		auto positionImage = createImage(&renderGraph.getAttachment("Position")->texture, 0, 0, "Position", leftLayout);
-		auto albedoImage = createImage(&renderGraph.getAttachment("Albedo")->texture, 0, 0, "Albedo", leftLayout);
-		auto normalTexture = createImage(&renderGraph.getAttachment("Normal")->texture, 0, 0, "Normal", leftLayout);
-		auto aoImage = createImage(&renderGraph.getAttachment("AmbientOcclusion")->texture, 0, 0, "RTAO", leftLayout);
-		auto aoAccumulatedImage = createImage(&renderGraph.getAttachment("AOAccumulation")->texture, 0, 0, "RTAO (Accumulation)", leftLayout);
+		auto positionImage = createImage(&renderGraph.getAttachment("Position")->texture, 0, 0, "Position", mainLayout);
+		auto albedoImage = createImage(&renderGraph.getAttachment("Albedo")->texture, 0, 0, "Albedo", mainLayout);
+		auto normalTexture = createImage(&renderGraph.getAttachment("Normal")->texture, 0, 0, "Normal", mainLayout);
+		auto aoImage = createImage(&renderGraph.getAttachment("AmbientOcclusion")->texture, 0, 0, "RTAO", mainLayout);
+		auto aoAccumulatedImage = createImage(&renderGraph.getAttachment("AOAccumulation")->texture, 0, 0, "RTAO (Accumulation)", mainLayout);
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo) {
+	void onExecute(PassExecuteInfo& executeInfo, Settings& settings) {
 		GraphicsDevice& device = *executeInfo.device;
 		RenderGraph& renderGraph = *executeInfo.renderGraph;
 		const CommandList& cmdList = *executeInfo.cmdList;
 		const FrameInfo& frameInfo = *executeInfo.frameInfo;
 
 		if (!g_Initialized) {
-			initialize(device, renderGraph, frameInfo);
+			initialize(device, renderGraph, frameInfo, settings);
 			g_Initialized = true;
 		}
 
@@ -275,15 +293,14 @@ namespace sr::uipass {
 
 		// Draw titlebar
 		const int sysMenuWidth = 44 * 3;
-		drawRect({ 0, 0 }, fWidth, 31, { 0.13f, 0.13f, 0.135f, 0.95f }, nullptr);
+		drawRect({ 0, 0 }, fWidth, 31, { 0.13f, 0.13f, 0.135f, 1.0f }, nullptr);
 		drawRect({ fWidth - sysMenuWidth, 0 }, 44, 31, { 1.0f, 1.0f, 1.0f, 1.0f }, &g_MinimizeIcon.getTexture());
 		drawRect({ fWidth - sysMenuWidth + 44, 0 }, 44, 31, { 1.0f, 1.0f, 1.0f, 1.0f }, &g_MaximizeIcon.getTexture());
 		drawRect({ fWidth - sysMenuWidth + 88, 0 }, 44, 31, { 1.0f, 1.0f, 1.0f, 1.0f }, &g_CloseIcon.getTexture());
-		drawText("Stingray", { fWidth / 2, 8 }, { 1.0f, 1.0f, 1.0f, 1.0f }, g_DefaultFont, UIPosFlag::HCENTER);
+		drawText("Stingray", { fWidth / 2, 8 }, { 1.0f, 1.0f, 1.0f, 1.0f }, &g_DefaultFont, UIPosFlag::HCENTER);
 
 		// Push constants
 		g_TextPushConstant.uiProjection = glm::ortho(0.0f, fWidth, fHeight, 0.0f);
-		g_TextPushConstant.texIndex = device.getDescriptorIndex(g_DefaultFont.fontAtlasTexture);
 		g_UIPushConstant.uiProjection = g_TextPushConstant.uiProjection;
 
 		// Update structured buffers for text and UI
@@ -317,8 +334,11 @@ namespace sr::uipass {
 		const int currentRow = (layout->elementIndices.size() / layout->cols);
 		const int currentCol = (layout->elementIndices.size() % layout->cols);
 
-		element->position.x = layout->padding + layout->position.x + currentCol * layout->getColWidth();
-		element->position.y = layout->padding + layout->position.y + currentRow * layout->getRowHeight();
+		int i = layout->getCurrentOccupiedWidth();
+		int j = layout->getCurrentOccupiedHeight();
+
+		element->position.x = layout->padding + layout->position.x + layout->getCurrentOccupiedWidth();
+		element->position.y = layout->padding + layout->position.y + layout->getCurrentOccupiedHeight();
 
 		// Distribute column width error
 		if (currentCol < widthError) {
@@ -357,12 +377,65 @@ namespace sr::uipass {
 
 	}
 
+	int UILayout::getLastColWidth() const {
+		if (elementIndices.empty()) {
+			return 0;
+		}
+
+		return g_UIElements[elementIndices.back()]->width;
+	}
+
+	int UILayout::getLastRowHeight() const {
+		if (elementIndices.empty()) {
+			return 0;
+		}
+
+		return g_UIElements[elementIndices.back()]->height;
+	}
+
+	int UILayout::getCurrentOccupiedWidth() const {
+		if (elementIndices.size() % cols == 0) {
+			return 0;
+		}
+
+		const size_t currentCol = elementIndices.size() % cols;
+		const size_t currentRow = elementIndices.size() / cols;
+		const size_t rowStartIndex = currentRow * cols;
+		const size_t rowEndIndex = rowStartIndex + currentCol;
+		int occupiedWidth = 0;
+
+		for (size_t i = rowStartIndex; i < rowEndIndex; ++i) {
+			const UIElement* element = g_UIElements[elementIndices[i]].get();
+			occupiedWidth += element->width + element->margin;
+		}
+
+		return occupiedWidth;
+	}
+
+	int UILayout::getCurrentOccupiedHeight() const {
+		if (elementIndices.size() / cols == 0) {
+			return 0;
+		}
+
+		const size_t currentCol = elementIndices.size() % cols;
+		const size_t currentRow = elementIndices.size() / cols;
+		const size_t endIndex = currentRow * cols;
+		int occupiedHeight = 0;
+
+		for (size_t i = 0; i < endIndex; i += cols) {
+			const UIElement* element = g_UIElements[elementIndices[i]].get();
+			occupiedHeight += element->height + element->margin;
+		}
+
+		return occupiedHeight;
+	}
+
 	void UIButton::draw(GraphicsDevice& device) {
 		const glm::vec2 buttonCenter = position + glm::vec2(width / 2, height / 2);
 		drawRect(position, width, height, m_DisplayColor, nullptr);
 
 		if (!text.empty()) {
-			drawText(text, buttonCenter, UI_COLOR_TEXT_PRIMARY, g_DefaultFont, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
+			drawText(text, buttonCenter, UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
 		}
 	}
 
@@ -392,7 +465,7 @@ namespace sr::uipass {
 	}
 
 	void UILabel::draw(GraphicsDevice& device) {
-		drawText(text, position, UI_COLOR_TEXT_PRIMARY, g_DefaultFont);
+		drawText(text, position, UI_COLOR_TEXT_PRIMARY, font);
 	}
 
 	void UILabel::processEvent(const UIEvent& event) {
@@ -403,18 +476,18 @@ namespace sr::uipass {
 		drawRect(position, UI_CHECKBOX_SIZE, UI_CHECKBOX_SIZE, UI_COLOR_SECONDARY, nullptr); // border
 		drawRect(position + glm::vec2(1, 1), UI_CHECKBOX_SIZE - 2, UI_CHECKBOX_SIZE - 2, UI_COLOR_PRIMARY2, nullptr); // background
 
-		if (checked) {
+		if (outValue != nullptr && *outValue) {
 			const Texture* checkTexture = &g_CheckIcon.getTexture();
 			drawRect(
 				position + glm::vec2(UI_CHECKBOX_SIZE / 2 - 16 / 2),
 				16,
 				16,
-				UI_ACCENT_COLOR,
+				UI_COLOR_ACCENT,
 				checkTexture
 			);
 		}
 
-		drawText(" " + text, position + glm::vec2(UI_CHECKBOX_SIZE, height / 2), UI_COLOR_TEXT_PRIMARY, g_DefaultFont, UIPosFlag::VCENTER);
+		drawText(" " + text, position + glm::vec2(UI_CHECKBOX_SIZE, height / 2), UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::VCENTER);
 	}
 
 	void UICheckBox::processEvent(const UIEvent& event) {
@@ -426,13 +499,56 @@ namespace sr::uipass {
 		break;
 		case UIEventType::MouseUp:
 		{
-			if (isClicked) {
-				checked = !checked;
+			if (isClicked && outValue != nullptr) {
+				*outValue = !(*outValue);
 			}
 
 			isClicked = false;
 		}
 		break;
+		}
+	}
+
+	void UISliderInt::draw(GraphicsDevice& device) {
+		const int sliderAreaWidth = width - 2;
+		const int sliderAreaHeight = height - 2;
+
+		drawRect(position, width, height, UI_COLOR_SECONDARY, nullptr);
+		drawRect(position + glm::vec2(1), sliderAreaWidth, sliderAreaHeight, UI_COLOR_PRIMARY2, nullptr);
+
+		if (value == nullptr) {
+			return;
+		}
+
+		const int clampedValue = std::clamp(*value, min, max);
+		const int valueRange = std::abs(max - min);
+		const float sliderPercentage = (*value - min) / (float)valueRange;
+
+		const glm::vec2 centerPos = position + glm::vec2(width / 2, height / 2);
+		const int sliderWidth = sliderPercentage * sliderAreaWidth;
+
+		drawRect(position + glm::vec2(1), sliderWidth, height - 2, UI_COLOR_ACCENT, nullptr);
+		drawText(std::to_string(*value), centerPos, UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
+		drawText(" " + text, { position.x + width, centerPos.y }, UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::VCENTER);
+	}
+
+	void UISliderInt::processEvent(const UIEvent& event) {
+		switch (event.getType()) {
+		case UIEventType::MouseDrag:
+			{
+				const int sliderWidth = width - 2; // adjusted to borders
+				const int relSliderPos = (int)event.getMouseData().position.x - (int)position.x + 1;
+
+				const float sliderPercentage = (relSliderPos) / (float)sliderWidth;
+				const int sliderValue = sr::math::lerp(min, max, sliderPercentage);
+
+				if (value == nullptr) {
+					return;
+				}
+				
+				*value = std::clamp(sliderValue, min, max);
+			}
+			break;
 		}
 	}
 
@@ -443,7 +559,7 @@ namespace sr::uipass {
 		drawRect(captionBackgroundPos, width, g_DefaultFont.boundingBoxHeight + g_DefaultFont.maxBearingY, { 0.0f, 0.0f, 0.0f, 0.6f }, nullptr);
 
 		const glm::vec2 captionPos = position + glm::vec2(width / 2, height - g_DefaultFont.boundingBoxHeight);
-		drawText(caption, captionPos, glm::vec4(1.0f), g_DefaultFont, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
+		drawText(caption, captionPos, glm::vec4(1.0f), &g_DefaultFont, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
 	}
 
 	void processEvent(const UIEvent& event) {
@@ -479,6 +595,13 @@ namespace sr::uipass {
 				g_LastUIElement = hitElement;
 			}
 			break;
+		case UIEventType::MouseDrag:
+			{
+				if (g_CurrentUIElement != nullptr) {
+					g_CurrentUIElement->processEvent(event);
+				}
+			}
+			break;
 		case UIEventType::MouseDown:
 		case UIEventType::MouseUp:
 			{
@@ -490,35 +613,37 @@ namespace sr::uipass {
 		}
 	}
 
-	UILayout* createLayout(int rows, int cols, int width, int height, int padding, UILayout* parentLayout /*= nullptr*/) {
+	UILayout* createLayout(int rows, int cols, int width, int height, int padding, UILayout* parentLayout) {
 		UILayout* layout = (UILayout*)g_UIElements.emplace_back(std::make_unique<UILayout>()).get();
 		layout->position = g_CursorOrigin;
+		layout->width = width;
+		layout->height = height;
 		layout->rows = rows;
 		layout->cols = cols;
 		layout->padding = padding;
 
-		if (width == 0 && height == 0) {
-			if (parentLayout != nullptr) {
+		if (parentLayout != nullptr) {
+			if (width == 0) {
 				layout->width = parentLayout->getColWidth();
+			}
+
+			if (height == 0) {
 				layout->height = parentLayout->getRowHeight();
 			}
-		}
-		else {
-			layout->width = width;
-			layout->height = height;
-		}
 
-		if (parentLayout != nullptr) {
 			positionWithLayout(layout, parentLayout);
 		}
+
+		++g_UIElementIndex;
 
 		return layout;
 	}
 
-	UIButton* createButton(const std::string& text, int width, int height, UILayout* layout /*= nullptr*/) {
+	UIButton* createButton(const std::string& text, int width, int height, UILayout* layout, const Font* font) {
 		UIButton* button = (UIButton*)g_UIElements.emplace_back(std::make_unique<UIButton>()).get();
 		button->position = g_CursorOrigin;
 		button->text = text;
+		button->font = font != nullptr ? font : &g_DefaultFont;
 
 		if (width == 0 && height == 0) {
 			if (layout != nullptr) {
@@ -538,39 +663,67 @@ namespace sr::uipass {
 			positionWithLayout(button, layout);
 		}
 
+		++g_UIElementIndex;
+
 		return button;
 	}
 
-	UILabel* createLabel(const std::string& text, UILayout* layout /*= nullptr*/) {
+	UILabel* createLabel(const std::string& text, UILayout* layout, const Font* font) {
 		UILabel* label = (UILabel*)g_UIElements.emplace_back(std::make_unique<UILabel>()).get();
 		label->position = g_CursorOrigin;
-		label->width = g_DefaultFont.calcTextWidth(text);
-		label->height = g_DefaultFont.boundingBoxHeight;
+		label->font = font != nullptr ? font : &g_DefaultFont;
+		label->width = label->font->calcTextWidth(text);
+		label->height = label->font->boundingBoxHeight;
 		label->text = text;
 
 		if (layout != nullptr) {
 			positionWithLayout(label, layout);
 		}
 
+		++g_UIElementIndex;
+
 		return label;
 	}
 
-	UICheckBox* createCheckBox(const std::string& text, bool checked, UILayout* layout) {
+	UICheckBox* createCheckBox(const std::string& text, bool* outValue, UILayout* layout, const Font* font) {
 		UICheckBox* checkBox = (UICheckBox*)g_UIElements.emplace_back(std::make_unique<UICheckBox>()).get();
 		checkBox->position = g_CursorOrigin;
-		checkBox->width = UI_CHECKBOX_SIZE + g_DefaultFont.calcTextWidth(" " + text);
+		checkBox->font = font != nullptr ? font : &g_DefaultFont;
+		checkBox->width = UI_CHECKBOX_SIZE + checkBox->font->calcTextWidth(" " + text);
 		checkBox->height = UI_CHECKBOX_SIZE;
 		checkBox->text = text;
-		checkBox->checked = checked;
+		checkBox->outValue = outValue;
 
 		if (layout != nullptr) {
 			positionWithLayout(checkBox, layout);
 		}
 
+		++g_UIElementIndex;
+
 		return checkBox;
 	}
 
-	UIImage* createImage(const Texture* texture, int width, int height, const std::string& caption, UILayout* layout /*= nullptr*/) {
+	UISliderInt* createSliderInt(const std::string& text, int width, int height, int min, int max, int* value, UILayout* layout, const Font* font) {
+		UISliderInt* sliderInt = (UISliderInt*)g_UIElements.emplace_back(std::make_unique<UISliderInt>()).get();
+		sliderInt->position = g_CursorOrigin;
+		sliderInt->width = width;
+		sliderInt->height = height;
+		sliderInt->text = text;
+		sliderInt->min = min;
+		sliderInt->max = max;
+		sliderInt->value = value;
+		sliderInt->font = font != nullptr ? font : &g_DefaultFont;
+
+		if (layout != nullptr) {
+			positionWithLayout(sliderInt, layout);
+		}
+
+		++g_UIElementIndex;
+
+		return sliderInt;
+	}
+
+	UIImage* createImage(const Texture* texture, int width, int height, const std::string& caption, UILayout* layout) {
 		UIImage* image = (UIImage*)g_UIElements.emplace_back(std::make_unique<UIImage>()).get();
 		image->position = g_CursorOrigin;
 		image->texture = texture;
@@ -593,6 +746,8 @@ namespace sr::uipass {
 		if (layout != nullptr) {
 			positionWithLayout(image, layout);
 		}
+
+		++g_UIElementIndex;
 
 		return image;
 	}

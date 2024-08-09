@@ -6,6 +6,7 @@
 
 #include "window.hpp"
 #include "frame_info.hpp"
+#include "settings.hpp"
 #include "../data/entity.hpp"
 #include "../managers/asset_manager.hpp"
 #include "../math/quat.hpp"
@@ -43,7 +44,8 @@ namespace sr {
 
 		int m_Width = 0;
 		int m_Height = 0;
-		std::string m_Title;
+		std::string m_Title = {};
+		Settings m_Settings = {};
 
 		std::unique_ptr<Window> m_Window = {};
 		std::unique_ptr<GraphicsDevice> m_Device = {};

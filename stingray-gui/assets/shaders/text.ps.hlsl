@@ -2,6 +2,7 @@ struct PSInput {
     float4 position : SV_Position;
     float4 color : COLOR;
     float2 texCoord : TEXCOORD0;
+    uint texIndex : TEXINDEX;
 };
 
 struct PSOutput {
@@ -18,10 +19,6 @@ struct PerFrameData {
 
 struct PushConstant {
     float4x4 uiProjection;
-    uint texIndex;
-    uint pad1;
-    uint pad2;
-    uint pad3;
 };
 
 ConstantBuffer<PerFrameData> g_PerFrameData : register(b0, space0);
@@ -30,7 +27,7 @@ ConstantBuffer<PushConstant> pushConstant : register(b0, space2);
 SamplerState linearSampler : register(s0);
 
 PSOutput main(PSInput input) {
-    Texture2D textureAtlas = ResourceDescriptorHeap[pushConstant.texIndex];
+    Texture2D textureAtlas = ResourceDescriptorHeap[input.texIndex];
 
     PSOutput output = (PSOutput)0;
 

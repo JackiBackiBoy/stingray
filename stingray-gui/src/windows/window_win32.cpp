@@ -1,123 +1,17 @@
 #include "window_win32.hpp"
 
+#include <Windows.h>
 #include <windowsx.h>
 
 #include "../core/utilities.hpp"
-#include "../input/rawinput.hpp"
+#include "../input/input.hpp"
 #include "../rendering/renderpasses/ui_pass.hpp"
+#include "../ui/ui_event.hpp"
 
 namespace sr {
-
-	WindowWin32::WindowWin32(const WindowInfo& info) :
-		IWindow(), m_WindowInfo(info) {
-
-		std::wstring wTitle = sr::utilities::toWideString(info.title);
-
-		const WNDCLASSEX windowClass = {
-			.cbSize = sizeof(WNDCLASSEX),
-			.style = CS_OWNDC,
-			.lpfnWndProc = WindowProcedure,
-			.cbClsExtra = 0,
-			.cbWndExtra = 0,
-			.hInstance = GetModuleHandle(nullptr),
-			.hIcon = nullptr,
-			.hCursor = LoadCursor(nullptr, IDC_ARROW),
-			.hbrBackground = nullptr,
-			.lpszMenuName = nullptr,
-			.lpszClassName = wTitle.c_str(),
-			.hIconSm = nullptr
-		};
-		RegisterClassEx(&windowClass);
-
-		const int width = info.width == ~0 ? DEFAULT_WIDTH : info.width;
-		const int height = info.height == ~0 ? DEFAULT_HEIGHT : info.height;
-		RECT windowRect = { 0, 0, width, height };
-
-		// Use the specified window dimensions as the dimensions for the client area
-		if (has_flag(info.flags, WindowFlag::SIZE_IS_CLIENT_AREA) && info.width != ~0 && info.height != ~0) {
-			if (has_flag(info.flags, WindowFlag::NO_TITLEBAR)) {
-				int borderX = GetSystemMetrics(SM_CXBORDER);
-				int borderY = GetSystemMetrics(SM_CYBORDER);
-				windowRect.right += borderX * 2;
-				windowRect.bottom += borderY * 2;
-			}
-			else {
-				AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-			}
-		}
-
-		const int windowWidth = windowRect.right - windowRect.left;
-		const int windowHeight = windowRect.bottom - windowRect.top;
-
-		// Window centering
-		POINT windowPosition = {
-			info.positionX == ~0 ? 0 : info.positionY,
-			info.positionY == ~0 ? 0 : info.positionY
-		};
-
-		if (has_flag(info.flags, WindowFlag::HCENTER) || has_flag(info.flags, WindowFlag::VCENTER)) {
-			const HMONITOR primaryMonitor = MonitorFromPoint({ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
-			MONITORINFO monitorInfo = { .cbSize = sizeof(monitorInfo) };
-
-			GetMonitorInfo(primaryMonitor, &monitorInfo);
-			const int monitorWidth = std::abs(monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left);
-			const int monitorHeight = std::abs(monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top);
-
-			if (has_flag(info.flags, WindowFlag::HCENTER) && info.width != ~0) {
-				windowPosition.x = monitorInfo.rcMonitor.left + monitorWidth / 2 - windowWidth / 2;
-			}
-
-			if (has_flag(info.flags, WindowFlag::VCENTER) && info.height != ~0) {
-				windowPosition.y = monitorInfo.rcMonitor.top + monitorHeight / 2 - windowHeight / 2;
-			}
-		}
-
-		m_Handle = CreateWindowEx(
-			0,
-			windowClass.lpszClassName,
-			wTitle.c_str(),
-			WS_OVERLAPPEDWINDOW,
-			windowPosition.x,
-			windowPosition.y,
-			windowWidth,
-			windowHeight,
-			nullptr,
-			nullptr,
-			windowClass.hInstance,
-			this
-		);
-	}
-
-	WindowWin32::~WindowWin32() {
-
-	}
-
-	void WindowWin32::pollEvents() {
-		MSG msg = {};
-
-		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-			if (msg.message == WM_QUIT) {
-				m_ShouldClose = true;
-			}
-			else {
-				TranslateMessage(&msg);
-				DispatchMessage(&msg);
-			}
-		}
-	}
-
-	void WindowWin32::show() {
-		ShowWindow(m_Handle, SW_SHOW);
-	}
-
-	bool WindowWin32::shouldClose() {
-		return m_ShouldClose;
-	}
-
-	void* WindowWin32::getHandle() {
-		return (void*)m_Handle;
-	}
-
+	/* ---------------------------------------------------------------------- */
+	/*                       WindowWin32 Implementation                       */
+	/* ---------------------------------------------------------------------- */
 	static constexpr int hitTestNCA(uint8_t hitstate) {
 		if (hitstate >= 0b10000000) { // minimize
 			return HTMINBUTTON;
@@ -159,24 +53,41 @@ namespace sr {
 		}
 	}
 
-	LRESULT WindowWin32::WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
-		WindowWin32* pWindow = reinterpret_cast<WindowWin32*>(GetWindowLongPtr(window, GWLP_USERDATA));
+	struct WindowWin32::Impl {
+		static LRESULT CALLBACK WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
+
+		void initialize(const WindowInfo& info);
+		UIEvent createMouseEvent(UINT message, WPARAM wParam, LPARAM lParam);
+
+		WindowInfo m_WindowInfo = {};
+		HWND m_Handle = nullptr;
+		RECT m_ClientRect = {};
+		RECT m_WindowRect = {};
+		bool m_ShouldClose = false;
+
+		int m_SizingBorder = 8;
+		int m_TitlebarHeight = 31;
+
+		UIEvent m_MouseButtonEvent = { UIEventType::None };
+		bool m_TrackingMouseLeave = false;
+		bool m_EnteringWindow = false;
+	};
+
+	LRESULT WindowWin32::Impl::WindowProcedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+		WindowWin32::Impl* pWindow = reinterpret_cast<WindowWin32::Impl*>(GetWindowLongPtr(window, GWLP_USERDATA));
 
 		switch (message) {
 		case WM_NCCREATE:
-			{
-				CREATESTRUCT* pCreateStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
-				pWindow = reinterpret_cast<WindowWin32*>(pCreateStruct->lpCreateParams);
-				SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)pWindow);
-			}
-			break;
+		{
+			CREATESTRUCT* pCreateStruct = reinterpret_cast<CREATESTRUCT*>(lParam);
+			pWindow = reinterpret_cast<WindowWin32::Impl*>(pCreateStruct->lpCreateParams);
+			SetWindowLongPtr(window, GWLP_USERDATA, (LONG_PTR)pWindow);
+		}
+		break;
 		case WM_ERASEBKGND:
 			return TRUE;
 		case WM_DESTROY:
 			PostQuitMessage(0);
-			return 0;
-		case WM_INPUT:
-			sr::rawinput::parseMessage((void*)lParam);
 			return 0;
 		case WM_LBUTTONDOWN:
 		case WM_MBUTTONDOWN:
@@ -194,23 +105,39 @@ namespace sr {
 		case WM_MOUSEHWHEEL:
 		case WM_MOUSEMOVE:
 		case WM_MOUSELEAVE:
-			{
-				if (pWindow != nullptr) {
-					UIEvent event = pWindow->createMouseEvent(message, wParam, lParam);
-					sr::uipass::processEvent(event);
-				}
+		{
+			if (message == WM_MOUSEMOVE) {
+				sr::input::parseMouseEvent((void*)wParam, (void*)lParam);
 			}
-			break;
+
+			if (pWindow != nullptr) {
+				UIEvent event = pWindow->createMouseEvent(message, wParam, lParam);
+				sr::uipass::processEvent(event);
+			}
+		}
+		break;
+		case WM_KEYDOWN:
+		case WM_SYSKEYDOWN:
+		{
+			sr::input::parseKeyDownEvent((void*)wParam, (void*)lParam);
+		}
+		break;
+		case WM_KEYUP:
+		case WM_SYSKEYUP:
+		{
+			sr::input::parseKeyUpEvent((void*)wParam, (void*)lParam);
+		}
+		break;
 		case WM_SETFOCUS:
-			{
-				if (pWindow != nullptr) {
-					pWindow->m_EnteringWindow = true;
-				}
+		{
+			if (pWindow != nullptr) {
+				pWindow->m_EnteringWindow = true;
 			}
-			break;
+		}
+		break;
 		case WM_NCCALCSIZE:
 			{
-				if (!has_flag(pWindow->m_WindowInfo.flags, WindowFlag::NO_TITLEBAR)) {
+				if (pWindow != nullptr && !has_flag(pWindow->m_WindowInfo.flags, WindowFlag::NO_TITLEBAR)) {
 					break;
 				}
 
@@ -268,7 +195,7 @@ namespace sr {
 				GetWindowRect(window, &rcWindow);
 
 				const bool insideWindow = ptMouse.x >= rcWindow.left && ptMouse.x <= rcWindow.right &&
-										  ptMouse.y >= rcWindow.top && ptMouse.y <= rcWindow.bottom;
+					ptMouse.y >= rcWindow.top && ptMouse.y <= rcWindow.bottom;
 				const int sizingBorder = pWindow->m_SizingBorder;
 				const int titlebarHeight = pWindow->m_TitlebarHeight;
 
@@ -277,14 +204,8 @@ namespace sr {
 				const uint8_t bottom = ptMouse.y <= rcWindow.bottom && ptMouse.y > rcWindow.bottom - sizingBorder;
 				const uint8_t right = ptMouse.x <= rcWindow.right && ptMouse.x > rcWindow.right - sizingBorder;
 				const uint8_t caption = !top && !left && !right && ptMouse.y <= rcWindow.top + titlebarHeight;
-				//const uint8_t minimize = !top && !left && !right && ptMouse.x >= rcWindow.right - WINDOW_SYSBUTTON_WIDTH * 3 &&
-				//	ptMouse.x < rcWindow.right - WINDOW_SYSBUTTON_WIDTH * 2 && ptMouse.y <= rcWindow.top + WINDOW_TITLEBAR_HEIGHT;
-				//const uint8_t maximize = !top && !left && !right && ptMouse.x >= rcWindow.right - WINDOW_SYSBUTTON_WIDTH * 2 &&
-				//	ptMouse.x < rcWindow.right - WINDOW_SYSBUTTON_WIDTH && ptMouse.y <= rcWindow.top + WINDOW_TITLEBAR_HEIGHT;
-				//const uint8_t close = !top && !left && !right && ptMouse.x >= rcWindow.right - WINDOW_SYSBUTTON_WIDTH &&
-				//	ptMouse.x < rcWindow.right && ptMouse.y <= rcWindow.top + WINDOW_TITLEBAR_HEIGHT;
 
-				uint8_t hitstate = /*(minimize << 7) | (maximize << 6) | (close << 5) |*/ (caption << 4) | (top << 3) | (left << 2) | (bottom << 1) | (right);
+				uint8_t hitstate = (caption << 4) | (top << 3) | (left << 2) | (bottom << 1) | (right);
 
 				int result = hitTestNCA(hitstate);
 
@@ -300,7 +221,88 @@ namespace sr {
 		return DefWindowProc(window, message, wParam, lParam);
 	}
 
-	UIEvent WindowWin32::createMouseEvent(UINT message, WPARAM wParam, LPARAM lParam) {
+	void WindowWin32::Impl::initialize(const WindowInfo& info) {
+		m_WindowInfo = info;
+
+		std::wstring wTitle = sr::utilities::toWideString(info.title);
+
+		const WNDCLASSEX windowClass = {
+			.cbSize = sizeof(WNDCLASSEX),
+			.style = CS_OWNDC,
+			.lpfnWndProc = WindowProcedure,
+			.cbClsExtra = 0,
+			.cbWndExtra = 0,
+			.hInstance = GetModuleHandle(nullptr),
+			.hIcon = nullptr,
+			.hCursor = LoadCursor(nullptr, IDC_ARROW),
+			.hbrBackground = nullptr,
+			.lpszMenuName = nullptr,
+			.lpszClassName = wTitle.c_str(),
+			.hIconSm = nullptr
+		};
+		RegisterClassEx(&windowClass);
+
+		const int width = info.width == ~0 ? DEFAULT_WIDTH : info.width;
+		const int height = info.height == ~0 ? DEFAULT_HEIGHT : info.height;
+		RECT windowRect = { 0, 0, width, height };
+
+		// Use the specified window dimensions as the dimensions for the client area
+		if (has_flag(info.flags, WindowFlag::SIZE_IS_CLIENT_AREA) && info.width != ~0 && info.height != ~0) {
+			if (has_flag(info.flags, WindowFlag::NO_TITLEBAR)) {
+				int borderX = GetSystemMetrics(SM_CXBORDER);
+				int borderY = GetSystemMetrics(SM_CYBORDER);
+
+				windowRect.right += borderX * 2;
+				windowRect.bottom += borderY * 2;
+			}
+			else {
+				AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
+			}
+		}
+
+		const int windowWidth = windowRect.right - windowRect.left;
+		const int windowHeight = windowRect.bottom - windowRect.top;
+
+		// Window centering
+		POINT windowPosition = {
+			info.positionX == ~0 ? 0 : info.positionY,
+			info.positionY == ~0 ? 0 : info.positionY
+		};
+
+		if (has_flag(info.flags, WindowFlag::HCENTER) || has_flag(info.flags, WindowFlag::VCENTER)) {
+			const HMONITOR primaryMonitor = MonitorFromPoint({ 0, 0 }, MONITOR_DEFAULTTOPRIMARY);
+			MONITORINFO monitorInfo = { .cbSize = sizeof(monitorInfo) };
+
+			GetMonitorInfo(primaryMonitor, &monitorInfo);
+			const int monitorWidth = std::abs(monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left);
+			const int monitorHeight = std::abs(monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top);
+
+			if (has_flag(info.flags, WindowFlag::HCENTER) && info.width != ~0) {
+				windowPosition.x = monitorInfo.rcMonitor.left + monitorWidth / 2 - windowWidth / 2;
+			}
+
+			if (has_flag(info.flags, WindowFlag::VCENTER) && info.height != ~0) {
+				windowPosition.y = monitorInfo.rcMonitor.top + monitorHeight / 2 - windowHeight / 2;
+			}
+		}
+
+		m_Handle = CreateWindowEx(
+			WS_EX_APPWINDOW,
+			windowClass.lpszClassName,
+			wTitle.c_str(),
+			WS_OVERLAPPEDWINDOW,
+			windowPosition.x,
+			windowPosition.y,
+			windowWidth,
+			windowHeight,
+			nullptr,
+			nullptr,
+			windowClass.hInstance,
+			this
+		);
+	}
+
+	UIEvent WindowWin32::Impl::createMouseEvent(UINT message, WPARAM wParam, LPARAM lParam) {
 		UIEvent event = UIEvent(UIEventType::MouseMove);
 		MouseEventData& mouse = event.getMouseData();
 
@@ -414,7 +416,6 @@ namespace sr {
 			tme.cbSize = sizeof(tme);
 			tme.dwFlags = TME_LEAVE;
 			tme.hwndTrack = m_Handle;
-			tme.dwHoverTime = HOVER_DEFAULT;
 
 			TrackMouseEvent(&tme);
 			m_TrackingMouseLeave = true;
@@ -428,6 +429,61 @@ namespace sr {
 		}
 
 		return event;
+	}
+
+	/* ---------------------------------------------------------------------- */
+	/*                         WindowWin32 Interface                          */
+	/* ---------------------------------------------------------------------- */
+	WindowWin32::WindowWin32(const WindowInfo& info) : IWindow() {
+		m_Impl = new Impl();
+
+		m_Impl->initialize(info);
+	}
+
+	WindowWin32::~WindowWin32() {
+		delete m_Impl;
+	}
+
+	void WindowWin32::pollEvents() {
+		MSG msg = {};
+
+		while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+			if (msg.message == WM_QUIT) {
+				m_Impl->m_ShouldClose = true;
+			}
+			else {
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
+		}
+	}
+
+	void WindowWin32::show() {
+		ShowWindow(m_Impl->m_Handle, SW_SHOW);
+	}
+
+	bool WindowWin32::shouldClose() {
+		return m_Impl->m_ShouldClose;
+	}
+
+	int WindowWin32::getClientWidth() const {
+		return m_Impl->m_ClientRect.right - m_Impl->m_ClientRect.left;
+	}
+
+	int WindowWin32::getClientHeight() const {
+		return m_Impl->m_ClientRect.bottom - m_Impl->m_ClientRect.top;
+	}
+
+	int WindowWin32::getWindowWidth() const {
+		return m_Impl->m_WindowRect.right - m_Impl->m_WindowRect.left;
+	}
+
+	int WindowWin32::getWindowHeight() const {
+		return m_Impl->m_WindowRect.bottom - m_Impl->m_WindowRect.top;
+	}
+
+	void* WindowWin32::getHandle() {
+		return (void*)m_Impl->m_Handle;
 	}
 
 }
