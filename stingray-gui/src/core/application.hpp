@@ -7,7 +7,7 @@
 #include "window.hpp"
 #include "frame_info.hpp"
 #include "settings.hpp"
-#include "../data/entity.hpp"
+#include "../data/scene.hpp"
 #include "../managers/asset_manager.hpp"
 #include "../math/quat.hpp"
 #include "../rendering/device.hpp"
@@ -20,10 +20,9 @@ namespace sr {
 	class Application {
 	public:
 		Application(const std::string& title, int width, int height);
-		virtual ~Application();
+		virtual ~Application() = default;
 
-		void run();
-		Entity* addEntity(const std::string& name);
+		virtual void run() final;
 
 		virtual void onInitialize() = 0;
 		virtual void onUpdate() = 0;
@@ -54,6 +53,7 @@ namespace sr {
 
 		SwapChain m_SwapChain = {};
 		Sampler m_LinearSampler = {};
+		Sampler m_DepthSampler = {};
 		Buffer m_PerFrameUBOs[GraphicsDevice::NUM_BUFFERS] = {};
 		PerFrameUBO m_PerFrameUBOData = {};
 
@@ -68,8 +68,6 @@ namespace sr {
 		Texture m_DefaultNormalMap = {};
 
 		// TODO: Move this to a scene class or something
-		std::vector<Entity*> m_Entities = {};
-		Entity* m_SphereEntity = nullptr;
-		Entity* m_MirrorEntity = nullptr;
+		std::unique_ptr<Scene> m_Scene = {};
 	};
 }

@@ -5,6 +5,12 @@
 #include "../math/quat.hpp"
 
 namespace sr {
+	struct DirectionLight {
+		glm::mat4 lightSpaceMatrix = { 1.0f };
+		glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f }; // NOTE: w is intensity
+		glm::vec3 direction = {};
+	};
+
 	struct Entity {
 		glm::vec3 position = { 0.0f, 0.0f, 0.0f };
 		glm::vec3 scale = { 1.0f, 1.0f, 1.0f };

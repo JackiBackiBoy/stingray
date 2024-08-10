@@ -6,7 +6,7 @@ using namespace sr;
 
 class Sandbox final : public Application {
 public:
-    Sandbox() : Application("Stingray", 1920, 1080) {}
+    Sandbox() : Application("Stingray", 3440, 1440) {}
     ~Sandbox() {}
 
     void onInitialize() override {

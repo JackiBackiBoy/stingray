@@ -54,6 +54,7 @@ namespace sr::uipass {
 	};
 
 	static GraphicsDevice* g_Device = nullptr;
+	static Scene* g_Scene = nullptr;
 	static Shader g_TextVertexShader = {};
 	static Shader g_TextPixelShader = {};
 	static BlendState g_TextBlendState = {};
@@ -155,8 +156,10 @@ namespace sr::uipass {
 		g_UIParamsData.push_back(uiParams);
 	}
 
-	static void initialize(GraphicsDevice& device, RenderGraph& renderGraph, const FrameInfo& frameInfo, Settings& settings) {
+	static void initialize(GraphicsDevice& device, RenderGraph& renderGraph, const FrameInfo& frameInfo, Settings& settings, Scene& scene) {
 		g_Device = &device;
+		g_Scene = &scene;
+
 		sr::fontloader::loadFromFile("assets/fonts/segoeui.ttf", 14, g_DefaultFont, device);
 		sr::fontloader::loadFromFile("assets/fonts/segoeuib.ttf", 14, g_DefaultBoldFont, device);
 
@@ -239,13 +242,20 @@ namespace sr::uipass {
 		g_FPSCounterLabel = createLabel("FPS: ", statsLayout);
 		auto gpuLabel = createLabel("GPU: " + device.getDeviceName(), statsLayout, &g_DefaultFont);
 
-		auto settingsLayout = createLayout(6, 1, 0, 200, 8, leftLayout);
+		auto settingsLayout = createLayout(6, 1, 0, 300, 8, leftLayout);
 		settingsLayout->backgroundColor = UI_COLOR_PRIMARY1;
 		auto settingsTitle = createLabel("Settings", settingsLayout, &g_DefaultBoldFont);
 		auto checkbox1 = createCheckBox("Draw Wireframe", nullptr, settingsLayout);
 		auto checkbox2 = createCheckBox("Ambient Occlusion", &settings.enableAO, settingsLayout);
 		auto checkbox3 = createCheckBox("Shadows", &settings.enableShadows, settingsLayout);
 		auto fovSlider = createSliderInt("Vertical FOV", 137, 20, 5, 130, &settings.verticalFOV, settingsLayout);
+		auto sunParamsTitle = createLabel("Sun Parameters", settingsLayout, &g_DefaultBoldFont);
+		static auto sunDirXSlider = createSliderFloat("Sun Direction X", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.x, settingsLayout);
+		static auto sunDirYSlider = createSliderFloat("Sun Direction Y", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.y, settingsLayout);
+		static auto sunDirZSlider = createSliderFloat("Sun Direction Z", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.z, settingsLayout);
+		sunDirXSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
+		sunDirYSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
+		sunDirZSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
 
 		auto renderPassesLayout = createLayout(3, 3, 0, 0, 8, leftLayout);
 		renderPassesLayout->backgroundColor = UI_COLOR_PRIMARY1;
@@ -255,24 +265,23 @@ namespace sr::uipass {
 			createLabel(" - " + pass->getName(), renderPassesLayout, &g_DefaultFont);
 		}
 
-
 		// Renderpass overview
 		auto positionImage = createImage(&renderGraph.getAttachment("Position")->texture, 0, 0, "Position", mainLayout);
 		auto albedoImage = createImage(&renderGraph.getAttachment("Albedo")->texture, 0, 0, "Albedo", mainLayout);
 		auto normalTexture = createImage(&renderGraph.getAttachment("Normal")->texture, 0, 0, "Normal", mainLayout);
-		auto shadowTexture = createImage(&renderGraph.getAttachment("ShadowMap")->texture, 500, 500, "Shadow Map", mainLayout);
+		auto shadowTexture = createImage(&renderGraph.getAttachment("ShadowMap")->texture, 200, 200, "Shadow Map", mainLayout);
 		auto aoImage = createImage(&renderGraph.getAttachment("AmbientOcclusion")->texture, 0, 0, "RTAO", mainLayout);
 		auto aoAccumulatedImage = createImage(&renderGraph.getAttachment("AOAccumulation")->texture, 0, 0, "RTAO (Accumulation)", mainLayout);
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo, Settings& settings) {
+	void onExecute(PassExecuteInfo& executeInfo, Settings& settings, Scene& scene) {
 		GraphicsDevice& device = *executeInfo.device;
 		RenderGraph& renderGraph = *executeInfo.renderGraph;
 		const CommandList& cmdList = *executeInfo.cmdList;
 		const FrameInfo& frameInfo = *executeInfo.frameInfo;
 
 		if (!g_Initialized) {
-			initialize(device, renderGraph, frameInfo, settings);
+			initialize(device, renderGraph, frameInfo, settings, scene);
 			g_Initialized = true;
 		}
 
@@ -615,6 +624,55 @@ namespace sr::uipass {
 		}
 	}
 
+	void UISliderFloat::draw(GraphicsDevice& device) {
+		const int sliderAreaWidth = width - 2;
+		const int sliderAreaHeight = height - 2;
+
+		drawRect(position, width, height, UI_COLOR_SECONDARY, nullptr);
+		drawRect(position + glm::vec2(1), sliderAreaWidth, sliderAreaHeight, UI_COLOR_PRIMARY2, nullptr);
+
+		if (value == nullptr) {
+			return;
+		}
+
+		const int clampedValue = std::clamp(*value, min, max);
+		const int valueRange = std::abs(max - min);
+		const float sliderPercentage = (*value - min) / (float)valueRange;
+
+		const glm::vec2 centerPos = position + glm::vec2(width / 2, height / 2);
+		const int sliderWidth = sliderPercentage * sliderAreaWidth;
+
+		drawRect(position + glm::vec2(1), sliderWidth, height - 2, UI_COLOR_ACCENT, nullptr);
+		drawText(std::to_string(*value), centerPos, UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::HCENTER | UIPosFlag::VCENTER);
+		drawText(" " + text, { position.x + width, centerPos.y }, UI_COLOR_TEXT_PRIMARY, font, UIPosFlag::VCENTER);
+	}
+
+	void UISliderFloat::processEvent(const UIEvent& event) {
+		switch (event.getType()) {
+		case UIEventType::MouseDrag:
+		{
+			const int sliderWidth = width - 2; // adjusted to borders
+			const int relSliderPos = (int)event.getMouseData().position.x - (int)position.x + 1;
+
+			const float sliderPercentage = (relSliderPos) / (float)sliderWidth;
+			const float sliderValue = sr::math::lerp(min, max, sliderPercentage);
+
+			if (value == nullptr) {
+				return;
+			}
+
+			const float clampedSlidervalue = std::clamp(sliderValue, min, max);
+
+			if (clampedSlidervalue != *value && onChanged) {
+				onChanged();
+			}
+
+			*value = clampedSlidervalue;
+		}
+		break;
+		}
+	}
+
 	UILayout* createLayout(int rows, int cols, int width, int height, int padding, UILayout* parentLayout) {
 		UILayout* layout = (UILayout*)g_UIElements.emplace_back(std::make_unique<UILayout>()).get();
 		layout->position = g_CursorOrigin;
@@ -752,6 +810,26 @@ namespace sr::uipass {
 		++g_UIElementIndex;
 
 		return image;
+	}
+
+	UISliderFloat* createSliderFloat(const std::string& text, int width, int height, float min, float max, float* value, UILayout* layout, const Font* font) {
+		UISliderFloat* sliderInt = (UISliderFloat*)g_UIElements.emplace_back(std::make_unique<UISliderFloat>()).get();
+		sliderInt->position = g_CursorOrigin;
+		sliderInt->width = width;
+		sliderInt->height = height;
+		sliderInt->text = text;
+		sliderInt->min = min;
+		sliderInt->max = max;
+		sliderInt->value = value;
+		sliderInt->font = font != nullptr ? font : &g_DefaultFont;
+
+		if (layout != nullptr) {
+			positionWithLayout(sliderInt, layout);
+		}
+
+		++g_UIElementIndex;
+
+		return sliderInt;
 	}
 
 }

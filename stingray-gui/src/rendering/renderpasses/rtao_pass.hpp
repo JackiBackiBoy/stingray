@@ -2,9 +2,9 @@
 
 #include "../device.hpp"
 #include "../render_graph.hpp"
-#include "../../data/entity.hpp"
+#include "../../data/scene.hpp"
 
 namespace sr::rtaopass {
-	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const std::vector<Entity*>& entities);
+	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const Scene& scene);
 	void destroy();
 }

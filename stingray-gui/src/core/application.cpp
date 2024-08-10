@@ -39,15 +39,6 @@ namespace sr {
 		m_RenderGraph = std::make_unique<RenderGraph>(*m_Device);
 	}
 
-	Application::~Application() {
-		for (size_t i = 0; i < m_Entities.size(); ++i) {
-			delete m_Entities[i];
-			m_Entities[i] = nullptr;
-		}
-
-		m_Entities.clear();
-	}
-
 	void Application::run() {
 		preInitialize();
 		onInitialize();
@@ -77,12 +68,6 @@ namespace sr {
 		}
 
 		m_Device->waitForGPU();
-	}
-
-	Entity* Application::addEntity(const std::string& name) {
-		m_Entities.push_back(new Entity());
-
-		return m_Entities.back();
 	}
 
 	void Application::preInitialize() {
@@ -166,9 +151,16 @@ namespace sr {
 		}
 
 		// Default samplers
-		const SamplerInfo linearSamplerInfo = {
+		const SamplerInfo linearSamplerInfo = {};
+		const SamplerInfo depthSamplerInfo = {
+			.addressU = TextureAddressMode::BORDER,
+			.addressV = TextureAddressMode::BORDER,
+			.addressW = TextureAddressMode::BORDER,
+			.borderColor = BorderColor::OPAQUE_WHITE
 		};
+
 		m_Device->createSampler(linearSamplerInfo, m_LinearSampler);
+		m_Device->createSampler(depthSamplerInfo, m_DepthSampler);
 
 		// Rendergraph
 		auto& gBufferPass = m_RenderGraph->addPass("GBufferPass");
@@ -177,14 +169,14 @@ namespace sr {
 		gBufferPass.addOutputAttachment("Normal", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R16G16B16A16_FLOAT });
 		gBufferPass.addOutputAttachment("Depth", { AttachmentType::DEPTH_STENCIL, uWidth, uHeight, 1, Format::D32_FLOAT });
 		gBufferPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::gbufferpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+			sr::gbufferpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
 		});
 
 		const uint32_t shadowMapDim = 2048;
 		auto& simpleShadowPass = m_RenderGraph->addPass("SimpleShadowPass");
 		simpleShadowPass.addOutputAttachment("ShadowMap", { AttachmentType::DEPTH_STENCIL, shadowMapDim, shadowMapDim, 1, Format::D16_UNORM });
 		simpleShadowPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::simpleshadowpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+			sr::simpleshadowpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
 		});
 
 		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
@@ -192,7 +184,7 @@ namespace sr {
 		rtaoPass.addInputAttachment("Normal");
 		rtaoPass.addOutputAttachment("AmbientOcclusion", { AttachmentType::RW_TEXTURE, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
 		rtaoPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::rtaopass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Entities);
+			sr::rtaopass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
 		});
 
 		auto& accumulationpass = m_RenderGraph->addPass("AccumulationPass");
@@ -206,11 +198,12 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("Position");
 		fullscreenTriPass.addInputAttachment("Albedo");
 		fullscreenTriPass.addInputAttachment("Normal");
+		fullscreenTriPass.addInputAttachment("Depth");
 		fullscreenTriPass.addInputAttachment("ShadowMap");
 		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
 		fullscreenTriPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()]);
+			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
 		});
 
 		auto& uiPass = m_RenderGraph->addPass("UIPass");
@@ -221,12 +214,13 @@ namespace sr {
 		uiPass.addInputAttachment("AmbientOcclusion");
 		uiPass.addInputAttachment("AOAccumulation");
 		uiPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::uipass::onExecute(executeInfo, m_Settings);
+			sr::uipass::onExecute(executeInfo, m_Settings, *m_Scene);
 		});
 
 		m_RenderGraph->build();
 
-		// Entities
+		// Scene description
+		m_Scene = std::make_unique<Scene>();
 		createEntities();
 	}
 
@@ -238,7 +232,7 @@ namespace sr {
 		// Cornell box
 		const float cornellScale = 4.0f;
 
-		auto cornellFloor = addEntity("Floor");
+		auto cornellFloor = m_Scene->createEntity("Floor");
 		cornellFloor->scale = glm::vec3(cornellScale);
 		cornellFloor->model = &m_PlaneModel.getModel();
 		cornellFloor->color = { 0.5f, 0.5f, 0.54f };
@@ -249,7 +243,7 @@ namespace sr {
 		//cornellTop->model = &m_PlaneModel.getModel();
 		//cornellTop->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(180.0f));
 
-		auto cornellWallLeft = addEntity("WallLeft");
+		auto cornellWallLeft = m_Scene->createEntity("WallLeft");
 		cornellWallLeft->position.x = -cornellScale * 0.5f + 0.01f;
 		cornellWallLeft->position.y = cornellScale * 0.5f;
 		cornellWallLeft->scale = glm::vec3(cornellScale);
@@ -265,7 +259,7 @@ namespace sr {
 		//cornellWallRight->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(90.0f));
 		//cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
 
-		auto cornellWallBack = addEntity("WallBack");
+		auto cornellWallBack = m_Scene->createEntity("WallBack");
 		cornellWallBack->position.y = cornellScale * 0.5f;
 		cornellWallBack->position.z = cornellScale * 0.5f;
 		cornellWallBack->scale = glm::vec3(cornellScale);
@@ -273,12 +267,12 @@ namespace sr {
 		cornellWallBack->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(-90.0f));
 		cornellWallBack->color = { 0.229f, 0.531f, 0.0f };
 
-		m_SphereEntity = addEntity("Sphere");
-		m_SphereEntity->scale = glm::vec3(0.5f);
-		m_SphereEntity->position = { -0.3f, 1.5f, 1.0f };
-		m_SphereEntity->model = &m_CubeModel.getModel();
+		auto sphere = m_Scene->createEntity("Sphere");
+		sphere->scale = glm::vec3(0.5f);
+		sphere->position = { -0.3f, 1.5f, 1.0f };
+		sphere->model = &m_CubeModel.getModel();
 
-		auto statue = addEntity("Statue");
+		auto statue = m_Scene->createEntity("Statue");
 		statue->position = { 0.5f, 0.0f, 0.2f };
 		statue->scale = glm::vec3(1.0f);
 		statue->model = &m_StatueModel.getModel();

@@ -2,17 +2,17 @@
 #include "graphics_dx12.hpp"
 #include "../../core/utilities.hpp"
 
+// DirectX 12
 #include "dxsdk/d3d12.h"
 #include "dxsdk/d3dx12.h"
 #include <dxgi.h>
 #include <dxgi1_6.h>
+#include <wrl.h>
+#include <Windows.h>
 
 // DirectX Shader Compiler
 #include "dxc/dxcapi.h"
 #include "dxc/d3d12shader.h"
-
-#include <wrl.h>
-#include <Windows.h>
 
 #include <cassert>
 #include <format>

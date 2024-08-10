@@ -26,7 +26,7 @@ namespace sr::simpleshadowpass {
 			.vertexShader = &g_VertexShader,
 			.fragmentShader = nullptr, // no pixel shader for shadow pass
 			.rasterizerState = {
-				.cullMode = CullMode::FRONT,
+				.cullMode = CullMode::BACK,
 				.frontCW = true,
 			},
 			.depthStencilState = {
@@ -62,7 +62,7 @@ namespace sr::simpleshadowpass {
 		}
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const Scene& scene) {
 		GraphicsDevice& device = *executeInfo.device;
 		RenderGraph& renderGraph = *executeInfo.renderGraph;
 		const CommandList& cmdList = *executeInfo.cmdList;
@@ -73,30 +73,14 @@ namespace sr::simpleshadowpass {
 		}
 
 		// Update shadow UBO data
-		// TODO: Make light direction dynamic
-		const glm::vec3 lightDir = normalize(glm::vec3(1.0f, 3.0f, -2.0f));
-		const float projectionArea = 5.0f;
-		const glm::mat4 lightProjection = glm::ortho(
-			-projectionArea,
-			projectionArea,
-			-projectionArea,
-			projectionArea,
-			0.01f,
-			10.0f
-		);
-		const glm::mat4 lightView = glm::lookAt(
-			lightDir * 3.0f,
-			{ 0.0f, 0.0f, 0.0f },
-			{ 0.0f, 1.0f, 0.0f }
-		);
-
-		g_ShadowUBOData.lightSpaceMatrix = lightProjection * lightView;
+		g_ShadowUBOData.lightSpaceMatrix = scene.getSunLSMatrix();
 		std::memcpy(g_ShadowUBOs[device.getBufferIndex()].mappedData, &g_ShadowUBOData, sizeof(g_ShadowUBOData));
 
 		// Rendering
 		device.bindPipeline(g_Pipeline, cmdList);
 		device.bindResource(g_ShadowUBOs[device.getBufferIndex()], "g_ShadowUBO", g_Pipeline, cmdList);
 
+		const auto& entities = scene.getEntities();
 		for (const auto& entity : entities) {
 			device.bindVertexBuffer(entity->model->vertexBuffer, cmdList);
 			device.bindIndexBuffer(entity->model->indexBuffer, cmdList);

@@ -22,6 +22,8 @@ namespace sr::rtaopass {
 	};
 
 	static Shader g_RayTracingShaderLibrary = {};
+	static RTPipeline g_RayTracingPipeline = {};
+	static RayTracingAS g_RayTracingTLAS = {};
 	static Buffer g_RayGenShaderTable = {};
 	static Buffer g_MissShaderTable = {};
 	static Buffer g_HitShaderTable = {};
@@ -33,10 +35,7 @@ namespace sr::rtaopass {
 	static std::vector<GeometryInfo> g_GeometryInfoData = {};
 	static Buffer g_MaterialInfoBuffer = {};
 	static std::vector<MaterialInfo> g_MaterialInfoData = {};
-
 	static std::vector<std::unique_ptr<RayTracingAS>> g_RayTracingBLASes = {};
-	static RayTracingAS g_RayTracingTLAS = {};
-	static RTPipeline g_RayTracingPipeline = {};
 	static bool g_Initialized = false;
 
 	static void createBLASes(GraphicsDevice& device, const std::vector<Entity*>& entities) {
@@ -197,17 +196,13 @@ namespace sr::rtaopass {
 		device.createBuffer(materialInfoBufferInfo, g_MaterialInfoBuffer, g_MaterialInfoData.data());
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
-		if (entities.empty()) {
-			return;
-		}
-
+	void onExecute(PassExecuteInfo& executeInfo, const Buffer& perFrameUBO, const Scene& scene) {
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
 		const CommandList& cmdList = *executeInfo.cmdList;
 		
 		if (!g_Initialized) {
-			initialize(device, entities);
+			initialize(device, scene.getEntities());
 			g_Initialized = true;
 		}
 

@@ -57,6 +57,8 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/data/font.cpp
     ${SOURCE_DIR}/data/font.hpp
     ${SOURCE_DIR}/data/model.hpp
+    ${SOURCE_DIR}/data/scene.cpp
+    ${SOURCE_DIR}/data/scene.hpp
     
     # Input
     ${SOURCE_DIR}/input/keycode.hpp

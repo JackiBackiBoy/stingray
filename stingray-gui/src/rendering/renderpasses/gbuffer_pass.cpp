@@ -54,7 +54,7 @@ namespace sr::gbufferpass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const std::vector<Entity*>& entities) {
+	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const Scene& scene) {
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
 		const CommandList& cmdList = *executeInfo.cmdList;
@@ -67,6 +67,7 @@ namespace sr::gbufferpass {
 		device.bindPipeline(g_Pipeline, cmdList);
 		device.bindResource(perFrameUBO, "g_PerFrameData", g_Pipeline, cmdList);
 
+		const auto& entities = scene.getEntities();
 		for (const auto& entity : entities) {
 			device.bindVertexBuffer(entity->model->vertexBuffer, cmdList);
 			device.bindIndexBuffer(entity->model->indexBuffer, cmdList);

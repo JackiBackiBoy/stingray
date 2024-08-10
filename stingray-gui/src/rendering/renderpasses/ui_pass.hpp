@@ -5,6 +5,7 @@
 #include "../../core/enum_flags.hpp"
 #include "../../core/settings.hpp"
 #include "../../data/font.hpp"
+#include "../../data/scene.hpp"
 #include "../../ui/ui_event.hpp"
 
 #include <functional>
@@ -110,6 +111,18 @@ namespace sr::uipass {
 		void processEvent(const UIEvent& event) override;
 	};
 
+	struct UISliderFloat : public UIElement {
+		std::string text = "";
+		float min = 0;
+		float max = 0;
+		float* value = nullptr;
+		const Font* font = nullptr;
+		std::function<void()> onChanged;
+
+		void draw(GraphicsDevice& device) override;
+		void processEvent(const UIEvent& event) override;
+	};
+
 	struct UIImage : public UIElement {
 		std::string caption = "";
 		const Texture* texture = nullptr;
@@ -126,7 +139,8 @@ namespace sr::uipass {
 	UILabel* createLabel(const std::string& text, UILayout* layout = nullptr, const Font* font = nullptr);
 	UICheckBox* createCheckBox(const std::string& text, bool* outValue, UILayout* layout = nullptr, const Font* font = nullptr);
 	UISliderInt* createSliderInt(const std::string& text, int width, int height, int min, int max, int* value, UILayout* layout = nullptr, const Font* font = nullptr);
+	UISliderFloat* createSliderFloat(const std::string& text, int width, int height, float min, float max, float* value, UILayout* layout = nullptr, const Font* font = nullptr);
 	UIImage* createImage(const Texture* texture, int width, int height, const std::string& caption, UILayout* layout = nullptr);
 
-	void onExecute(PassExecuteInfo& executeInfo, Settings& settings);
+	void onExecute(PassExecuteInfo& executeInfo, Settings& settings, Scene& scene);
 }
