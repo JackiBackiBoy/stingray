@@ -107,7 +107,6 @@ namespace sr {
 
 		createDefaultTextures();
 		createDefaultBuffers();
-		createDefaultTextures();
 		createDefaultSamplers();
 		createRenderGraph();
 		createEntities();
