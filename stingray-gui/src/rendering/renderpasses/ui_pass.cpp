@@ -242,20 +242,26 @@ namespace sr::uipass {
 		g_FPSCounterLabel = createLabel("FPS: ", statsLayout);
 		auto gpuLabel = createLabel("GPU: " + device.getDeviceName(), statsLayout, &g_DefaultFont);
 
-		auto settingsLayout = createLayout(6, 1, 0, 300, 8, leftLayout);
+		auto settingsLayout = createLayout(6, 1, 0, 350, 8, leftLayout);
 		settingsLayout->backgroundColor = UI_COLOR_PRIMARY1;
 		auto settingsTitle = createLabel("Settings", settingsLayout, &g_DefaultBoldFont);
 		auto checkbox1 = createCheckBox("Draw Wireframe", nullptr, settingsLayout);
 		auto checkbox2 = createCheckBox("Ambient Occlusion", &settings.enableAO, settingsLayout);
-		auto checkbox3 = createCheckBox("Shadows", &settings.enableShadows, settingsLayout);
+
+		// Shadows
+		auto shadowSectionLabel = createLabel("Shadows", settingsLayout, &g_DefaultBoldFont);
+		auto shadowEnableCheckbox = createCheckBox("Enable Shadows", &settings.enableShadows, settingsLayout);
+		auto shadowMinBiasSlider = createSliderFloat("Minimum Bias", 137, 20, 0.0f, 0.001f, &settings.ssmMinBias, settingsLayout);
+		auto shadowMaxBiasSlider = createSliderFloat("Maximum Bias", 137, 20, 0.0f, 0.01f, &settings.ssmMaxBias, settingsLayout);
+
 		auto fovSlider = createSliderInt("Vertical FOV", 137, 20, 5, 130, &settings.verticalFOV, settingsLayout);
 		auto sunParamsTitle = createLabel("Sun Parameters", settingsLayout, &g_DefaultBoldFont);
 		static auto sunDirXSlider = createSliderFloat("Sun Direction X", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.x, settingsLayout);
 		static auto sunDirYSlider = createSliderFloat("Sun Direction Y", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.y, settingsLayout);
 		static auto sunDirZSlider = createSliderFloat("Sun Direction Z", 137, 20, -1.0f, 1.0f, &scene.getSunLight().direction.z, settingsLayout);
-		sunDirXSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
-		sunDirYSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
-		sunDirZSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); };
+		sunDirXSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); }; // force update
+		sunDirYSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); }; //
+		sunDirZSlider->onChanged = [&] { g_Scene->setSunDirection(g_Scene->getSunDirection()); }; //
 
 		auto renderPassesLayout = createLayout(3, 3, 0, 0, 8, leftLayout);
 		renderPassesLayout->backgroundColor = UI_COLOR_PRIMARY1;
@@ -635,8 +641,7 @@ namespace sr::uipass {
 			return;
 		}
 
-		const int clampedValue = std::clamp(*value, min, max);
-		const int valueRange = std::abs(max - min);
+		const float valueRange = std::abs(max - min);
 		const float sliderPercentage = (*value - min) / (float)valueRange;
 
 		const glm::vec2 centerPos = position + glm::vec2(width / 2, height / 2);

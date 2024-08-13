@@ -8,5 +8,7 @@ namespace sr {
 		bool enableShadows = true;
 		bool enableAO = true;
 		bool enableRayTracing = true;
+		float ssmMinBias = 0.0001f;
+		float ssmMaxBias = 0.005f;
 	};
 }

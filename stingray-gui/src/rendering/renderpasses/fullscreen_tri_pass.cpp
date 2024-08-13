@@ -15,6 +15,8 @@ namespace sr::fstripass {
 		uint32_t depthIndex;
 		uint32_t shadowMapIndex;
 		uint32_t aoIndex;
+		float shadowMinBias;
+		float shadowMaxBias;
 	};
 
 	static Shader g_VertexShader = {};
@@ -50,7 +52,7 @@ namespace sr::fstripass {
 		}
 	}
 
-	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, Scene& scene) {
+	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, const Settings& settings, Scene& scene) {
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
 		const CommandList& cmdList = *executeInfo.cmdList;
@@ -72,8 +74,10 @@ namespace sr::fstripass {
 			.gBufferAlbedoIndex = device.getDescriptorIndex(albedoAttachment->texture),
 			.gBufferNormalIndex = device.getDescriptorIndex(normalAttachment->texture),
 			.depthIndex = device.getDescriptorIndex(depthAttachment->texture),
-			.shadowMapIndex = device.getDescriptorIndex(shadowAttachment->texture),
-			.aoIndex = device.getDescriptorIndex(accumulationAttachment->texture)
+			.shadowMapIndex = settings.enableShadows ? device.getDescriptorIndex(shadowAttachment->texture) : 0,
+			.aoIndex = settings.enableAO ? device.getDescriptorIndex(accumulationAttachment->texture) : 0,
+			.shadowMinBias = settings.ssmMinBias,
+			.shadowMaxBias = settings.ssmMaxBias
 		};
 
 		g_LightingUBOData.directionLight = scene.getSunLight();

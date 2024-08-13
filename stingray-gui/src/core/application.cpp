@@ -44,7 +44,7 @@ namespace sr {
 		onInitialize();
 
 		bool firstFrame = true;
-		while (!m_Window->shouldClose()) {
+		while (!m_Window->shouldClose() && !sr::input::isDown(KeyCode::Escape)) {
 			m_Window->pollEvents();
 
 			static auto lastTime = std::chrono::high_resolution_clock::now();
@@ -153,10 +153,14 @@ namespace sr {
 		// Default samplers
 		const SamplerInfo linearSamplerInfo = {};
 		const SamplerInfo depthSamplerInfo = {
+			.filter = Filter::COMPARISON_MIN_MAG_MIP_LINEAR,
 			.addressU = TextureAddressMode::BORDER,
 			.addressV = TextureAddressMode::BORDER,
 			.addressW = TextureAddressMode::BORDER,
-			.borderColor = BorderColor::OPAQUE_WHITE
+			.maxAnisotropy = 1,
+			.comparisonFunc = ComparisonFunc::LESS_EQUAL,
+			.borderColor = BorderColor::OPAQUE_WHITE,
+			.maxLOD = 0
 		};
 
 		m_Device->createSampler(linearSamplerInfo, m_LinearSampler);
@@ -203,7 +207,7 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("AmbientOcclusion");
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
 		fullscreenTriPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
+			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Settings, *m_Scene);
 		});
 
 		auto& uiPass = m_RenderGraph->addPass("UIPass");

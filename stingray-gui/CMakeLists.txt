@@ -131,6 +131,13 @@ if (WIN32)
         SR_WINDOWS
         NOMINMAX
         WIN32_LEAN_AND_MEAN
+        NOGDICAPMASKS
+        NOCRYPT
+        NOMENUS
+        NODRAWTEXT
+        NOMEMMGR
+        NOCOMM
+        NOKANJI
 
         UNICODE
         _UNICODE

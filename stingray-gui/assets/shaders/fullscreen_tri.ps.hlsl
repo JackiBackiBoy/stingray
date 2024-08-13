@@ -33,6 +33,8 @@ struct PushConstant {
     uint depthIndex;
     uint shadowMapIndex;
     uint aoIndex;
+    float shadowMinBias;
+    float shadowMaxBias;
 };
 
 ConstantBuffer<PerFrameData> g_PerFrameData : register(b0, space0);
@@ -41,7 +43,7 @@ ConstantBuffer<PushConstant> pushConstant : register(b0, space2);
 
 /* Samplers */
 SamplerState g_LinearSampler : register(s0);
-SamplerState g_DepthSampler : register(s1);
+SamplerComparisonState g_DepthSampler : register(s1);
 
 static const float AMBIENT_TERM = 0.3f;
 
@@ -54,13 +56,23 @@ float calcShadow(DirectionLight light, float3 fragPos, float3 normal) {
     projCoords = float3(projCoords.xy * 0.5f + 0.5f, projCoords.z);
     projCoords.y = 1.0f - projCoords.y; // TODO: might not be needed
 
-    float shadowDepth = shadowTexture.Sample(g_DepthSampler, projCoords.xy).r;
-    float currentDepth = projCoords.z;
-
     float diffuseFactor = dot(normal, normalize(light.direction));
-    float bias = lerp(0.005f, 0.0001f, diffuseFactor);
+    float bias = lerp(pushConstant.shadowMaxBias, pushConstant.shadowMinBias, diffuseFactor);
 
-    float shadow = shadowDepth + bias < currentDepth ? 0.0f : 1.0f;
+    float currentDepth = projCoords.z;
+    // float shadowDepth = shadowTexture.SampleCmpLevelZero(g_DepthSampler, projCoords.xy, currentDepth - bias).r;
+
+    float shadow = 0.0f;
+    float texelSize = 1.0f / 2048;
+    for (float y = -1.5f; y <= 1.5f; y += 1.0f) {
+        for (float x = -1.5f; x <= 1.5f; x += 1.0f) {
+            shadow += shadowTexture.SampleCmpLevelZero(g_DepthSampler, projCoords.xy + float2(x, y) * texelSize, currentDepth - bias).r;
+        }
+    }
+
+    shadow /= 16.0f;
+
+    //float shadow = shadowDepth + bias < currentDepth ? 0.0f : 1.0f;
 
     return shadow;
 }
