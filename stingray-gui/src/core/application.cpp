@@ -34,9 +34,9 @@ namespace sr {
 		
 		#if defined(SR_WINDOWS)
 			m_Device = std::make_unique<GraphicsDevice_DX12>(m_Width, m_Height, m_Window->getHandle());
+		#elif defined(SR_MACOS)
+			m_Device = std::make_unique<GraphicsDevice_Metal>(m_Width, m_Height, m_Window->getHandle());
 		#endif
-
-		m_RenderGraph = std::make_unique<RenderGraph>(*m_Device);
 	}
 
 	void Application::run() {
@@ -75,8 +75,26 @@ namespace sr {
 
 		const uint32_t uWidth = static_cast<uint32_t>(m_Width);
 		const uint32_t uHeight = static_cast<uint32_t>(m_Height);
+		const float aspectRatio = (float)m_Width / m_Height;
 
-		// Render objects
+		// Camera
+		Camera& camera = m_FrameInfo.camera;
+		camera.position = { 2.0f, 1.0f, -3.0f };
+		camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(-32.0f));
+
+		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
+		const glm::vec3 qUp = quatRotateVector(camera.orientation, { 0.0f, 1.0f, 0.0f });
+		const glm::vec3 qForward = quatRotateVector(camera.orientation, { 0.0f, 0.0f, 1.0f });
+
+		camera.projectionMatrix = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
+		camera.viewMatrix = glm::lookAt(camera.position, camera.position + qForward, qUp);
+
+		m_PerFrameUBOData.projectionMatrix = camera.projectionMatrix;
+		m_PerFrameUBOData.viewMatrix = camera.viewMatrix;
+		m_PerFrameUBOData.invViewProjection = glm::inverse(camera.projectionMatrix * camera.viewMatrix);
+		m_PerFrameUBOData.cameraPosition = camera.position;
+
+		// Swapchain
 		const SwapChainInfo swapChainInfo = {
 			.width = uWidth,
 			.height = uHeight,
@@ -85,11 +103,17 @@ namespace sr {
 			.fullscreen = false,
 			.vsync = true
 		};
-
-		// TODO: Only works on windows, we'll fix this later
 		m_Device->createSwapChain(swapChainInfo, m_SwapChain, m_Window->getHandle());
 
-		// Default textures
+		createDefaultTextures();
+		createDefaultBuffers();
+		createDefaultTextures();
+		createDefaultSamplers();
+		createRenderGraph();
+		createEntities();
+	}
+
+	void Application::createDefaultTextures() {
 		const TextureInfo defaultAlbedoMapInfo = {
 			.width = 1,
 			.height = 1,
@@ -119,7 +143,9 @@ namespace sr {
 			.rowPitch = sizeof(uint32_t)
 		};
 		m_Device->createTexture(defaultNormalMapInfo, m_DefaultNormalMap, &defaultNormalMapSubresource);
+	}
 
+	void Application::createDefaultBuffers() {
 		// Per-frame constant buffers (one for each frame in flight)
 		const BufferInfo perFrameUBOInfo = {
 			.size = sizeof(PerFrameUBO),
@@ -129,28 +155,12 @@ namespace sr {
 			.persistentMap = true
 		};
 
-		Camera& camera = m_FrameInfo.camera;
-		camera.position = { 2.0f, 1.0f, -3.0f };
-		camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(-32.0f));
-
-		const glm::vec3 qRight = quatRotateVector(camera.orientation, { 1.0f, 0.0f, 0.0f });
-		const glm::vec3 qUp = quatRotateVector(camera.orientation, { 0.0f, 1.0f, 0.0f });
-		const glm::vec3 qForward = quatRotateVector(camera.orientation, { 0.0f, 0.0f, 1.0f });
-
-		const float aspectRatio = (float)m_Width / m_Height;
-		camera.projectionMatrix = glm::perspective(glm::radians(60.0f), aspectRatio, 0.1f, 125.0f);
-		camera.viewMatrix = glm::lookAt(camera.position, camera.position + qForward, qUp);
-
-		m_PerFrameUBOData.projectionMatrix = camera.projectionMatrix;
-		m_PerFrameUBOData.viewMatrix = camera.viewMatrix;
-		m_PerFrameUBOData.invViewProjection = glm::inverse(camera.projectionMatrix * camera.viewMatrix);
-		m_PerFrameUBOData.cameraPosition = camera.position;
-
 		for (size_t f = 0; f < GraphicsDevice::NUM_BUFFERS; ++f) {
-			m_Device->createBuffer(perFrameUBOInfo, m_PerFrameUBOs[f], &m_PerFrameUBOData);
+			m_Device->createBuffer(perFrameUBOInfo, m_PerFrameUBOs[f], nullptr);
 		}
+	}
 
-		// Default samplers
+	void Application::createDefaultSamplers() {
 		const SamplerInfo linearSamplerInfo = {};
 		const SamplerInfo depthSamplerInfo = {
 			.filter = Filter::COMPARISON_MIN_MAG_MIP_LINEAR,
@@ -165,8 +175,14 @@ namespace sr {
 
 		m_Device->createSampler(linearSamplerInfo, m_LinearSampler);
 		m_Device->createSampler(depthSamplerInfo, m_DepthSampler);
+	}
 
-		// Rendergraph
+	void Application::createRenderGraph() {
+		const uint32_t uWidth = static_cast<uint32_t>(m_Width);
+		const uint32_t uHeight = static_cast<uint32_t>(m_Height);
+
+		m_RenderGraph = std::make_unique<RenderGraph>(*m_Device);
+
 		auto& gBufferPass = m_RenderGraph->addPass("GBufferPass");
 		gBufferPass.addOutputAttachment("Position", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R32G32B32A32_FLOAT });
 		gBufferPass.addOutputAttachment("Albedo", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
@@ -174,14 +190,14 @@ namespace sr {
 		gBufferPass.addOutputAttachment("Depth", { AttachmentType::DEPTH_STENCIL, uWidth, uHeight, 1, Format::D32_FLOAT });
 		gBufferPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::gbufferpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
-		});
+			});
 
 		const uint32_t shadowMapDim = 2048;
 		auto& simpleShadowPass = m_RenderGraph->addPass("SimpleShadowPass");
 		simpleShadowPass.addOutputAttachment("ShadowMap", { AttachmentType::DEPTH_STENCIL, shadowMapDim, shadowMapDim, 1, Format::D16_UNORM });
 		simpleShadowPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::simpleshadowpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
-		});
+			});
 
 		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
 		rtaoPass.addInputAttachment("Position");
@@ -189,14 +205,14 @@ namespace sr {
 		rtaoPass.addOutputAttachment("AmbientOcclusion", { AttachmentType::RW_TEXTURE, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
 		rtaoPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::rtaopass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
-		});
+			});
 
 		auto& accumulationpass = m_RenderGraph->addPass("AccumulationPass");
 		accumulationpass.addInputAttachment("AmbientOcclusion");
 		accumulationpass.addOutputAttachment("AOAccumulation", { AttachmentType::RENDER_TARGET, uWidth, uHeight, 1, Format::R8G8B8A8_UNORM });
 		accumulationpass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::accumulationpass::onExecute(executeInfo);
-		});
+			});
 
 		auto& fullscreenTriPass = m_RenderGraph->addPass("FullscreenTriPass");
 		fullscreenTriPass.addInputAttachment("Position");
@@ -208,7 +224,7 @@ namespace sr {
 		fullscreenTriPass.addInputAttachment("AOAccumulation");
 		fullscreenTriPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::fstripass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], m_Settings, *m_Scene);
-		});
+			});
 
 		auto& uiPass = m_RenderGraph->addPass("UIPass");
 		uiPass.addInputAttachment("Position");
@@ -219,16 +235,14 @@ namespace sr {
 		uiPass.addInputAttachment("AOAccumulation");
 		uiPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
 			sr::uipass::onExecute(executeInfo, m_Settings, *m_Scene);
-		});
+			});
 
 		m_RenderGraph->build();
-
-		// Scene description
-		m_Scene = std::make_unique<Scene>();
-		createEntities();
 	}
 
 	void Application::createEntities() {
+		m_Scene = std::make_unique<Scene>();
+
 		m_CubeModel = sr::assetmanager::loadFromFile("assets/models/multimeshtest.gltf", *m_Device);
 		m_PlaneModel = sr::assetmanager::loadFromFile("assets/models/plane.gltf", *m_Device);
 		m_StatueModel = sr::assetmanager::loadFromFile("assets/models/statue.gltf", *m_Device);
@@ -241,12 +255,6 @@ namespace sr {
 		cornellFloor->model = &m_PlaneModel.getModel();
 		cornellFloor->color = { 0.5f, 0.5f, 0.54f };
 
-		//auto cornellTop = addEntity("Top");
-		//cornellTop->position.y = 2 * cornellScale;
-		//cornellTop->scale = glm::vec3(cornellScale);
-		//cornellTop->model = &m_PlaneModel.getModel();
-		//cornellTop->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(180.0f));
-
 		auto cornellWallLeft = m_Scene->createEntity("WallLeft");
 		cornellWallLeft->position.x = -cornellScale * 0.5f + 0.01f;
 		cornellWallLeft->position.y = cornellScale * 0.5f;
@@ -254,14 +262,6 @@ namespace sr {
 		cornellWallLeft->model = &m_PlaneModel.getModel();
 		cornellWallLeft->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
 		cornellWallLeft->color = { 1.0f, 0.0f, 0.0f };
-
-		//auto cornellWallRight = addEntity("WallRight");
-		//cornellWallRight->position.x = cornellScale;
-		//cornellWallRight->position.y = cornellScale;
-		//cornellWallRight->scale = glm::vec3(cornellScale);
-		//cornellWallRight->model = &m_PlaneModel.getModel();
-		//cornellWallRight->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(90.0f));
-		//cornellWallRight->color = { 0.0f, 1.0f, 0.0f, 1.0f };
 
 		auto cornellWallBack = m_Scene->createEntity("WallBack");
 		cornellWallBack->position.y = cornellScale * 0.5f;

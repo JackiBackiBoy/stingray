@@ -1,3 +1,5 @@
+#include "globals.hlsl"
+
 struct VSInput {
     float3 position: POSITION;
     float3 normal: NORMAL;
@@ -7,14 +9,6 @@ struct VSInput {
 
 struct VSOutput {
     float4 position: SV_Position;
-};
-
-struct PerFrameData {
-    float4x4 projectionMatrix;
-    float4x4 viewMatrix;
-    float4x4 invViewProjection;
-    float3 cameraPosition;
-    uint pad1;
 };
 
 struct ShadowUBO {

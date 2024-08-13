@@ -37,6 +37,10 @@ namespace sr {
 		};
 
 		void preInitialize();
+		void createDefaultTextures();
+		void createDefaultBuffers();
+		void createDefaultSamplers();
+		void createRenderGraph();
 		void createEntities();
 		void update(FrameInfo& frameInfo);
 		void render(FrameInfo& frameInfo);

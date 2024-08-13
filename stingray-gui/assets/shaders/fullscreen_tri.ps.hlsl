@@ -54,7 +54,7 @@ float calcShadow(DirectionLight light, float3 fragPos, float3 normal) {
     float4 fragPosLS = mul(light.lightSpaceMatrix, float4(fragPos, 1.0f));
     float3 projCoords = fragPosLS.xyz / fragPosLS.w; // perspective division
     projCoords = float3(projCoords.xy * 0.5f + 0.5f, projCoords.z);
-    projCoords.y = 1.0f - projCoords.y; // TODO: might not be needed
+    projCoords.y = 1.0f - projCoords.y;
 
     float diffuseFactor = dot(normal, normalize(light.direction));
     float bias = lerp(pushConstant.shadowMaxBias, pushConstant.shadowMinBias, diffuseFactor);

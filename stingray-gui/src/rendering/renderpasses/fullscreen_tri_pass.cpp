@@ -48,7 +48,7 @@ namespace sr::fstripass {
 		};
 
 		for (size_t i = 0; i < GraphicsDevice::NUM_BUFFERS; ++i) {
-			device.createBuffer(lightingUBOInfo, g_LightingUBOs[i], &g_LightingUBOData); // TODO: Data can be nullptr
+			device.createBuffer(lightingUBOInfo, g_LightingUBOs[i], nullptr);
 		}
 	}
 
