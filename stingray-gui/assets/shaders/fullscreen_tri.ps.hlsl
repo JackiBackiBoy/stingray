@@ -1,3 +1,5 @@
+#define MAX_POINT_LIGHTS 32
+
 struct PSInput {
     float4 pos: SV_Position;
     float2 texCoord: TEXCOORD0;
@@ -21,9 +23,16 @@ struct DirectionLight {
     float3 direction;
 };
 
+struct PointLight {
+    float4 color; // NOTE: w-component is intensity
+    float3 position;
+    uint pad1;
+};
+
 struct LightingUBO {
     DirectionLight directionLight;
-    uint pad1;
+    uint numPointLights;
+    PointLight pointLights[MAX_POINT_LIGHTS];
 };
 
 struct PushConstant {
@@ -77,6 +86,39 @@ float calcShadow(DirectionLight light, float3 fragPos, float3 normal) {
     return shadow;
 }
 
+float3 calcDirectionLight(DirectionLight light, float3 fragPos, float3 fragNormal) {
+    float3 normLightDir = normalize(light.direction);
+
+    // Diffuse factor
+    float diffuse = max(dot(fragNormal, normLightDir), 0.0);
+
+    // Specular highlight (blinn-phong)
+    float3 fragToViewDir = normalize(g_PerFrameData.cameraPosition - fragPos);
+    float3 halfwayDir = normalize(normLightDir + fragToViewDir);
+    float specular = diffuse * pow(max(dot(fragNormal, halfwayDir), 0.0f), 16.0f);
+
+    return (diffuse + specular) * light.color.xyz;
+}
+
+float3 calcPointLight(PointLight light, float3 fragPos, float3 fragNormal) {
+    float3 dirToLight = light.position - fragPos;
+    float3 normDirToLight = normalize(light.position - fragPos);
+
+    // Diffuse factor
+    float diffuse = max(dot(fragNormal, normDirToLight), 0.0);
+
+    // Specular highlight (blinn-phong)
+    float3 fragToViewDir = normalize(g_PerFrameData.cameraPosition - fragPos);
+    float3 halfwayDir = normalize(normDirToLight + fragToViewDir);
+    float specular = diffuse * pow(max(dot(fragNormal, halfwayDir), 0.0f), 16.0f);
+
+    // Attenuation (inverse square law)
+    float attenuation = 1.0f / dot(dirToLight, dirToLight);
+    float3 intensity = light.color.w * attenuation;
+
+    return (diffuse + specular) * intensity * light.color.xyz;
+}
+
 PSOutput main(PSInput input) {
     Texture2D<float4> positionTexture = ResourceDescriptorHeap[pushConstant.gBufferPositionIndex];
     Texture2D<float4> albedoTexture = ResourceDescriptorHeap[pushConstant.gBufferAlbedoIndex];
@@ -93,18 +135,16 @@ PSOutput main(PSInput input) {
     // Shadows
     float shadow = calcShadow(dirLight, fragPos, normal);
 
-    // Diffuse lighting
-    // TODO: This might have to be further investigated for HDR output
-    float3 normDirLight = normalize(dirLight.direction);
-    float diffuse = max(dot(normal, normDirLight), 0.0);
+    // Direction light contribution
+    float3 dirLightContrib = calcDirectionLight(dirLight, fragPos, normal);
+    float3 pointLightContrib = float3(0.0f, 0.0f, 0.0f);
 
-    // Specular highlight (blinn-phong)
-    float3 fragToViewDir = normalize(g_PerFrameData.cameraPosition - fragPos);
-    float3 halfwayDir = normalize(normDirLight + fragToViewDir);
-    float specular = diffuse * pow(max(dot(normal, halfwayDir), 0.0f), 16.0f);
+    for (int i = 0; i < g_LightingUBO.numPointLights; ++i) {
+        pointLightContrib += calcPointLight(g_LightingUBO.pointLights[i], fragPos, normal);
+    }
 
     PSOutput output;
-    output.color = float4((ambientTerm + (shadow) * (diffuse + specular)) * albedo, 1);
+    output.color = float4((ambientTerm + (shadow) * (dirLightContrib + pointLightContrib)) * albedo, 1);
 
     return output;
 }

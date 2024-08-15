@@ -570,7 +570,7 @@ namespace sr {
 
 			Buffer stagingBuffer = {};
 			createBuffer(stagingBufferInfo, stagingBuffer, data);
-			auto internalStagingBuffer = (Impl::Buffer_DX12*)stagingBuffer.internalState.get();
+			auto internalStagingBuffer = toDX12Internal<Impl::Buffer_DX12>(stagingBuffer);
 
 			Impl::CopyAllocator::CopyCMD copyCommand = m_Impl->copyAllocator.allocate(info.size);
 			copyCommand.cmdList->CopyResource(internalState->resource.Get(), internalStagingBuffer->resource.Get());
@@ -691,7 +691,7 @@ namespace sr {
 
 		// Vertex shader
 		if (info.vertexShader != nullptr) {
-			auto internalShader = (Shader_DX12*)info.vertexShader->internalState.get();
+			auto internalShader = toDX12Internal<Shader_DX12>(*info.vertexShader);
 
 			const D3D12_SHADER_BYTECODE shaderCode = {
 				.pShaderBytecode = internalShader->shaderBlob->GetBufferPointer(),
@@ -712,7 +712,7 @@ namespace sr {
 		}
 		// Fragment shader (pixel shader)
 		if (info.fragmentShader != nullptr) {
-			auto internalShader = (Shader_DX12*)info.fragmentShader->internalState.get();
+			auto internalShader = toDX12Internal<Shader_DX12>(*info.fragmentShader);
 
 			const D3D12_SHADER_BYTECODE shaderCode = {
 				.pShaderBytecode = internalShader->shaderBlob->GetBufferPointer(),
@@ -1287,7 +1287,7 @@ namespace sr {
 
 				Buffer stagingBuffer = {};
 				createBuffer(stagingBufferInfo, stagingBuffer, nullptr);
-				auto internalStagingBuffer = (Impl::Buffer_DX12*)stagingBuffer.internalState.get();
+				auto internalStagingBuffer = toDX12Internal<Impl::Buffer_DX12>(stagingBuffer);
 
 				Impl::CopyAllocator::CopyCMD copyCommand = m_Impl->copyAllocator.allocate(0);
 
@@ -1443,8 +1443,8 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::createShaderTable(const RTPipeline& rtPipeline, Buffer& table, const std::string& exportName) {
-		auto internalRTPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalTable = (Impl::Buffer_DX12*)table.internalState.get();
+		auto internalRTPipeline = toDX12Internal<RayTracingPipeline_DX12>(rtPipeline);
+		auto internalTable = toDX12Internal<Impl::Buffer_DX12>(table);
 
 		const UINT shaderTableSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 
@@ -1479,10 +1479,10 @@ namespace sr {
 		bvh.type = Resource::Type::RAYTRACING_AS;
 
 		if (info.type == RayTracingASType::TLAS) {
-			auto internalInstanceBuffer = (Impl::Buffer_DX12*)info.tlas.instanceBuffer->internalState.get();
+			auto internalInstanceBuffer = toDX12Internal<Impl::Buffer_DX12>(*info.tlas.instanceBuffer);
 
 			internalState->desc.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-			internalState->desc.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+			internalState->desc.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
 			internalState->desc.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 			internalState->desc.InstanceDescs = internalInstanceBuffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)info.tlas.offset;
 			internalState->desc.NumDescs = info.tlas.numInstances;
@@ -1497,8 +1497,8 @@ namespace sr {
 			// Set up DX12 BLAS geometries
 			for (auto& geometry : info.blas.geometries) {
 				// Mesh data properties
-				auto internalVertexBuffer = (Impl::Buffer_DX12*)geometry.triangles.vertexBuffer->internalState.get();
-				auto internalIndexBuffer = (Impl::Buffer_DX12*)geometry.triangles.indexBuffer->internalState.get();
+				auto internalVertexBuffer = toDX12Internal<Impl::Buffer_DX12>(*geometry.triangles.vertexBuffer);
+				auto internalIndexBuffer = toDX12Internal<Impl::Buffer_DX12>(*geometry.triangles.indexBuffer);
 
 				auto& dx12GeometryDesc = internalState->geometries.emplace_back(); // create new empty DX12 RT geometry desc
 				dx12GeometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES; // TODO: Add checks for geometry type, for now we assume triangles
@@ -1577,14 +1577,14 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::buildRTAS(const RayTracingAS& dst, const RayTracingAS* src, const CommandList& cmdList) {
-		auto internalDstAS = (Impl::RayTracingAS_DX12*)dst.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalDstAS = toDX12Internal<Impl::RayTracingAS_DX12>(dst);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc = {};
 		buildDesc.Inputs = internalDstAS->desc;
 
 		if (dst.info.type == RayTracingASType::TLAS) {
-			auto internalDstInstanceBuffer = (Impl::Buffer_DX12*)dst.info.tlas.instanceBuffer->internalState.get();
+			auto internalDstInstanceBuffer = toDX12Internal<Impl::Buffer_DX12>(*dst.info.tlas.instanceBuffer);
 			buildDesc.Inputs.InstanceDescs = internalDstInstanceBuffer->gpuAddress + (D3D12_GPU_VIRTUAL_ADDRESS)dst.info.tlas.offset;
 		}
 		else if (dst.info.type == RayTracingASType::BLAS) {
@@ -1592,13 +1592,13 @@ namespace sr {
 		}
 
 		if (src != nullptr) {
-			auto internalSrcAS = (Impl::RayTracingAS_DX12*)src->internalState.get();
+			auto internalSrcAS = toDX12Internal<Impl::RayTracingAS_DX12>(*src);
 
 			buildDesc.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 			buildDesc.SourceAccelerationStructureData = internalSrcAS->gpuAddress;
 		}
 
-		auto internalDstScratchBuffer = (Impl::Buffer_DX12*)internalDstAS->scratchBuffer.internalState.get();
+		auto internalDstScratchBuffer = toDX12Internal<Impl::Buffer_DX12>(internalDstAS->scratchBuffer);
 		buildDesc.DestAccelerationStructureData = internalDstAS->gpuAddress;
 		buildDesc.ScratchAccelerationStructureData = internalDstScratchBuffer->gpuAddress;
 
@@ -1606,7 +1606,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::writeTLASInstance(const RayTracingTLAS::Instance& instance, void* dest) {
-		auto internalBLASResource = (Impl::RayTracingAS_DX12*)instance.blasResource->internalState.get();
+		auto internalBLASResource = toDX12Internal<Impl::RayTracingAS_DX12>(*instance.blasResource);
 
 		D3D12_RAYTRACING_INSTANCE_DESC dx12Instance = {};
 		dx12Instance.AccelerationStructure = internalBLASResource->gpuAddress;
@@ -1630,7 +1630,7 @@ namespace sr {
 		CD3DX12_STATE_OBJECT_DESC stateObjectDesc{ D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE };
 
 		// Shader libraries
-		auto internalShader = (Shader_DX12*)info.shaderLibraries.front().shader->internalState.get();
+		auto internalShader = toDX12Internal<Shader_DX12>(*info.shaderLibraries.front().shader);
 
 		auto shaderLibrary = stateObjectDesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
 		D3D12_SHADER_BYTECODE shaderDxil = CD3DX12_SHADER_BYTECODE((void*)internalShader->shaderBlob->GetBufferPointer(), internalShader->shaderBlob->GetBufferSize());
@@ -1784,9 +1784,9 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::bindRTPipeline(const RTPipeline& rtPipeline, const Texture& rtOutputUAV, const CommandList& cmdList) {
-		auto internalRTPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalRTOutputUAV = (Impl::Texture_DX12*)rtOutputUAV.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalRTPipeline = toDX12Internal<RayTracingPipeline_DX12>(rtPipeline);
+		auto internalRTOutputUAV = toDX12Internal<Impl::Texture_DX12>(rtOutputUAV);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		internalCommandList->getGraphicsCommandList()->SetPipelineState1(internalRTPipeline->pso.Get());
 
@@ -1800,9 +1800,9 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::bindRTResource(const Resource& res, const std::string& name, const RTPipeline& rtPipeline, const CommandList& cmdList) {
-		auto internalResource = (Resource_DX12*)res.internalState.get();
-		auto internalPipeline = (RayTracingPipeline_DX12*)rtPipeline.internalState.get();
-		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
+		auto internalResource = toDX12Internal<Resource_DX12>(res);
+		auto internalPipeline = toDX12Internal<RayTracingPipeline_DX12>(rtPipeline);
+		auto internalCmdList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
 		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
@@ -1859,7 +1859,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::dispatchRays(const DispatchRaysInfo& info, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		D3D12_DISPATCH_RAYS_DESC dispatchRaysDesc = {};
 		dispatchRaysDesc.Width = info.width;
@@ -1868,14 +1868,14 @@ namespace sr {
 
 		// TODO: Perhaps add offsets? Because that seems to be required sometimes I guess
 		if (info.rayGenTable != nullptr) {
-			auto internalRayGenTable = (Impl::Buffer_DX12*)info.rayGenTable->internalState.get();
+			auto internalRayGenTable = toDX12Internal<Impl::Buffer_DX12>(*info.rayGenTable);
 
 			dispatchRaysDesc.RayGenerationShaderRecord.StartAddress = internalRayGenTable->gpuAddress;
 			dispatchRaysDesc.RayGenerationShaderRecord.SizeInBytes = internalRayGenTable->info.size;
 		}
 
 		if (info.missTable != nullptr) {
-			auto internalMissTable = (Impl::Buffer_DX12*)info.missTable->internalState.get();
+			auto internalMissTable = toDX12Internal<Impl::Buffer_DX12>(*info.missTable);
 
 			dispatchRaysDesc.MissShaderTable.StartAddress = internalMissTable->gpuAddress;
 			dispatchRaysDesc.MissShaderTable.SizeInBytes = internalMissTable->info.size;
@@ -1883,7 +1883,7 @@ namespace sr {
 		}
 
 		if (info.hitGroupTable != nullptr) {
-			auto internalHitGroupTable = (Impl::Buffer_DX12*)info.hitGroupTable->internalState.get();
+			auto internalHitGroupTable = toDX12Internal<Impl::Buffer_DX12>(*info.hitGroupTable);
 
 			dispatchRaysDesc.HitGroupTable.StartAddress = internalHitGroupTable->gpuAddress;
 			dispatchRaysDesc.HitGroupTable.SizeInBytes = internalHitGroupTable->info.size;
@@ -1894,8 +1894,8 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::bindPipeline(const Pipeline& pipeline, const CommandList& cmdList) {
-		auto internalPipeline = (Pipeline_DX12*)pipeline.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalPipeline = toDX12Internal<Pipeline_DX12>(pipeline);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		if (cmdList.type == QueueType::DIRECT) {
 			ID3D12GraphicsCommandList* graphicsCommandList = internalCommandList->getGraphicsCommandList();
@@ -1914,7 +1914,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::bindViewport(const Viewport& viewport, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->RSSetViewports(
@@ -1929,8 +1929,8 @@ namespace sr {
 			return;
 		}
 
-		auto internalBuffer = (Impl::Buffer_DX12*)vertexBuffer.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalBuffer = toDX12Internal<Impl::Buffer_DX12>(vertexBuffer);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		const D3D12_VERTEX_BUFFER_VIEW vertexBufferView = {
 			.BufferLocation = internalBuffer->gpuAddress,
@@ -1950,8 +1950,8 @@ namespace sr {
 			return;
 		}
 
-		auto internalBuffer = (Impl::Buffer_DX12*)indexBuffer.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalBuffer = toDX12Internal<Impl::Buffer_DX12>(indexBuffer);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		const D3D12_INDEX_BUFFER_VIEW indexBufferView = {
 			.BufferLocation = internalBuffer->gpuAddress,
@@ -1966,9 +1966,9 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::bindResource(const Resource& res, const std::string& name, const Pipeline& pipeline, const CommandList& cmdList) {
-		auto internalResource = (Resource_DX12*)res.internalState.get();
-		auto internalPipeline = (Pipeline_DX12*)pipeline.internalState.get();
-		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
+		auto internalResource = toDX12Internal<Resource_DX12>(res);
+		auto internalPipeline = toDX12Internal<Pipeline_DX12>(pipeline);
+		auto internalCmdList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		const auto& nameSearch = internalPipeline->rootParameterIndexLUT.find(name);
 		if (nameSearch == internalPipeline->rootParameterIndexLUT.end()) {
@@ -2001,9 +2001,11 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::copyResource(const Resource* dst, const Resource* src, const CommandList& cmdList) {
-		auto internalDstResource = (Resource_DX12*)dst->internalState.get();
-		auto internalSrcResource = (Resource_DX12*)src->internalState.get();
-		auto internalCmdList = (CommandList_DX12*)cmdList.internalState;
+		assert(dst != nullptr && src != nullptr);
+
+		auto internalDstResource = toDX12Internal<Resource_DX12>(*dst);
+		auto internalSrcResource = toDX12Internal<Resource_DX12>(*src);
+		auto internalCmdList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		// TODO: Allow for other resource copy operations
 		internalCmdList->getGraphicsCommandList()->CopyResource(
@@ -2013,7 +2015,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::pushConstants(const void* data, uint32_t size, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		D3D12_ROOT_PARAMETER rootParameter = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -2034,7 +2036,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::pushConstantsCompute(const void* data, uint32_t size, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		D3D12_ROOT_PARAMETER rootParameter = {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -2055,14 +2057,14 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::barrier(const GPUBarrier& barrier, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		D3D12_RESOURCE_BARRIER dx12Barrier = {};
 
 		switch (barrier.type) {
 		case GPUBarrier::Type::UAV:
 			{
-				auto internalUAVResource = (Resource_DX12*)barrier.uav.resource->internalState.get();
+				auto internalUAVResource = toDX12Internal<Resource_DX12>(*barrier.uav.resource);
 
 				dx12Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
 				dx12Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -2071,7 +2073,7 @@ namespace sr {
 			break;
 		case GPUBarrier::Type::IMAGE:
 			{
-				auto internalImage = (Impl::Texture_DX12*)barrier.image.texture->internalState.get();
+				auto internalImage = toDX12Internal<Impl::Texture_DX12>(*barrier.image.texture);
 
 				dx12Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 				dx12Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -2150,8 +2152,8 @@ namespace sr {
 			return;
 		}
 
-		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalSwapChain = toDX12Internal<SwapChain_DX12>(swapChain);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		// Resource barrier PRESENT -> RT
 		const D3D12_RESOURCE_BARRIER rtvBarrier = {
@@ -2170,7 +2172,7 @@ namespace sr {
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = {};
 
 		if (renderPass.depth != nullptr) { // has depth attachment
-			auto internalDepthTexture = (Impl::Texture_DX12*)renderPass.depth->internalState.get();
+			auto internalDepthTexture = toDX12Internal<Impl::Texture_DX12>(*renderPass.depth);
 			dsvHandle = internalDepthTexture->dsvDescriptor.handle;
 		}
 
@@ -2209,18 +2211,19 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::beginRenderPass(const PassInfo& renderPass, const CommandList& cmdList, bool clearTargets) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(renderPass.numColorAttachments);
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = {};
 
 		for (size_t i = 0; i < renderPass.numColorAttachments; ++i) {
-			auto internalColorAttachment = (Impl::Texture_DX12*)renderPass.colors[i]->internalState.get();
+			assert(renderPass.colors[i] != nullptr);
+			auto internalColorAttachment = toDX12Internal<Impl::Texture_DX12>(*renderPass.colors[i]);
 			rtvHandles[i] = internalColorAttachment->rtvDescriptor.handle;
 		}
 
 		if (renderPass.depth != nullptr) {
-			auto internalDepthAttachment = (Impl::Texture_DX12*)renderPass.depth->internalState.get();
+			auto internalDepthAttachment = toDX12Internal<Impl::Texture_DX12>(*renderPass.depth);
 			dsvHandle = internalDepthAttachment->dsvDescriptor.handle;
 		}
 
@@ -2272,8 +2275,8 @@ namespace sr {
 			return;
 		}
 
-		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalSwapChain = toDX12Internal<SwapChain_DX12>(swapChain);
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		// Resource barrier RT -> PRESENT
 		const D3D12_RESOURCE_BARRIER rtvBarrier = {
@@ -2294,7 +2297,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::submitCommandLists(SwapChain& swapChain) {
-		auto internalSwapChain = (SwapChain_DX12*)swapChain.internalState.get();
+		auto internalSwapChain = toDX12Internal<SwapChain_DX12>(swapChain);
 
 		const size_t tempCommandCount = m_Impl->commandCounter;
 		m_Impl->commandCounter = 0; // reset command counter
@@ -2335,7 +2338,7 @@ namespace sr {
 			presentFlags = DXGI_PRESENT_ALLOW_TEARING;
 		}
 
-		internalSwapChain->swapChain->Present(syncInterval, presentFlags);
+		ThrowIfFailed(internalSwapChain->swapChain->Present(syncInterval, presentFlags));
 
 		++m_FrameCount;
 
@@ -2355,7 +2358,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::drawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex, uint32_t startInstance, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->DrawInstanced(
@@ -2368,7 +2371,7 @@ namespace sr {
 	}
 
 	void GraphicsDevice_DX12::drawIndexed(uint32_t indexCount, uint32_t startIndex, uint32_t baseVertex, const CommandList& cmdList) {
-		auto internalCommandList = (CommandList_DX12*)cmdList.internalState;
+		auto internalCommandList = toDX12Internal<CommandList_DX12>(cmdList);
 
 		if (cmdList.type == QueueType::DIRECT) {
 			internalCommandList->getGraphicsCommandList()->DrawIndexedInstanced(
@@ -2383,7 +2386,7 @@ namespace sr {
 
 	uint32_t GraphicsDevice_DX12::getDescriptorIndex(const Resource& resource) const {
 		if (resource.type == Resource::Type::TEXTURE) {
-			auto internalTexture = (Impl::Texture_DX12*)resource.internalState.get();
+			auto internalTexture = toDX12Internal<Impl::Texture_DX12>(resource);
 
 			switch (internalTexture->subResourceType) {
 			case SubresourceType::RTV:
@@ -2395,7 +2398,7 @@ namespace sr {
 			}
 		}
 		else if (resource.type == Resource::Type::BUFFER) {
-			auto internalBuffer = (Impl::Buffer_DX12*)resource.internalState.get();
+			auto internalBuffer = toDX12Internal<Impl::Buffer_DX12>(resource);
 
 			return internalBuffer->srvDescriptor.index;
 		}

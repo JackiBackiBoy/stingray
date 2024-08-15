@@ -4,8 +4,9 @@
 
 namespace sr::fstripass {
 	struct alignas(256) LightingUBO {
-		DirectionLight directionLight;
-		uint32_t pad1 = 0;
+		DirectionLight directionLight = {};
+		uint32_t numPointLights = 0;
+		PointLight pointLights[Scene::MAX_POINT_LIGHTS] = {};
 	};
 
 	struct PushConstant {
@@ -62,6 +63,7 @@ namespace sr::fstripass {
 			g_Initialized = true;
 		}
 
+		// Push constant data
 		auto positionAttachment = graph.getAttachment("Position");
 		auto albedoAttachment = graph.getAttachment("Albedo");
 		auto normalAttachment = graph.getAttachment("Normal");
@@ -80,15 +82,25 @@ namespace sr::fstripass {
 			.shadowMaxBias = settings.ssmMaxBias
 		};
 
+		// Lighting UBO data
+		const auto& pointLights = scene.getPointLights();
+
 		g_LightingUBOData.directionLight = scene.getSunLight();
+		g_LightingUBOData.numPointLights = static_cast<uint32_t>(pointLights.size());
+		
+		for (size_t i = 0; i < pointLights.size(); ++i) {
+			g_LightingUBOData.pointLights[i] = *pointLights[i];
+		}
+
 		std::memcpy(g_LightingUBOs[device.getBufferIndex()].mappedData, &g_LightingUBOData, sizeof(g_LightingUBOData));
 
+		// Drawing
 		device.bindPipeline(g_Pipeline, cmdList);
 		device.bindResource(perFrameUBO, "g_PerFrameData", g_Pipeline, cmdList);
 		device.bindResource(g_LightingUBOs[device.getBufferIndex()], "g_LightingUBO", g_Pipeline, cmdList);
 
 		device.pushConstants(&pushConstant, sizeof(pushConstant), cmdList);
-		device.draw(3, 0, cmdList);
+		device.draw(3, 0, cmdList); // fullscreen triangle
 	}
 
 }

@@ -17,6 +17,17 @@ namespace sr {
 		}
 	};
 
+	inline bool operator==(const quat& q1, const quat& q2) {
+		return (q1.w == q2.w &&
+				q1.x == q2.x &&
+				q1.y == q2.y &&
+				q1.z == q2.z);
+	}
+
+	inline bool operator!=(const quat& q1, const quat& q2) {
+		return !(q1 == q2);
+	}
+
 	inline quat operator*(const quat& q1, const quat& q2) {
 		return {
 			q1.w * q2.w - (q1.x * q2.x) - (q1.y * q2.y) - (q1.z * q2.z),

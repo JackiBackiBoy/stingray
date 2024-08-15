@@ -1,5 +1,7 @@
 #include "accumulation_pass.hpp"
 
+#include <optional>
+
 namespace sr::accumulationpass {
 	struct PushConstant {
 		uint32_t lastFrameIndex;
@@ -12,6 +14,7 @@ namespace sr::accumulationpass {
 	static Pipeline g_Pipeline = {};
 	static Texture g_AccumulationTexture = {};
 	static uint32_t g_AccumulationCount = 0;
+	static std::optional<Camera> g_LastCamera = {};
 	static bool g_Initialized = false;
 
 	static void initialize(RenderGraph& graph, GraphicsDevice& device) {
@@ -38,6 +41,17 @@ namespace sr::accumulationpass {
 		device.createTexture(accumulationTextureInfo, g_AccumulationTexture, nullptr);
 	}
 
+	bool hasChanged(const Camera& camera) {
+		if (!g_LastCamera.has_value()) {
+			g_LastCamera = camera;
+		}
+
+		const Camera& lastCamera = g_LastCamera.value();
+
+		return (camera.projectionMatrix != lastCamera.projectionMatrix ||
+				camera.viewMatrix != lastCamera.viewMatrix);
+	}
+
 	void onExecute(PassExecuteInfo& executeInfo) {
 		RenderGraph& graph = *executeInfo.renderGraph;
 		GraphicsDevice& device = *executeInfo.device;
@@ -48,9 +62,15 @@ namespace sr::accumulationpass {
 			g_Initialized = true;
 		}
 
-		if (executeInfo.frameInfo->cameraMoved) {
+		const Camera& camera = executeInfo.frameInfo->camera;
+
+		// Reset the accumulation if anything has moved
+		// TODO: We can make the check for entity movement faster
+		//if (hasChanged(camera)) {
 			g_AccumulationCount = 0;
-		}
+		//}
+
+		g_LastCamera = executeInfo.frameInfo->camera;
 
 		auto thisAttachment = graph.getAttachment("AOAccumulation");
 		auto aoAttachment = graph.getAttachment("AmbientOcclusion");

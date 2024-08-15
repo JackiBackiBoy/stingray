@@ -45,6 +45,8 @@ namespace sr {
 		void update(FrameInfo& frameInfo);
 		void render(FrameInfo& frameInfo);
 
+		Entity* m_StatueEntity = nullptr;
+
 		int m_Width = 0;
 		int m_Height = 0;
 		std::string m_Title = {};

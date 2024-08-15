@@ -18,7 +18,13 @@ namespace sr {
 			m_Entities[i] = nullptr;
 		}
 
+		for (size_t i = 0; i < m_PointLights.size(); ++i) {
+			delete m_PointLights[i];
+			m_PointLights[i] = nullptr;
+		}
+
 		m_Entities.clear();
+		m_PointLights.clear();
 	}
 
 	Entity* Scene::createEntity(const std::string& name) {
@@ -28,6 +34,17 @@ namespace sr {
 		m_Entities.push_back(new Entity());
 
 		return m_Entities.back();
+	}
+
+	PointLight* Scene::createPointLight(const std::string& name, const glm::vec4& color, const glm::vec3& position) {
+		assert(!m_PointLightIndexLUT.contains(name) && m_PointLights.size() < MAX_POINT_LIGHTS);
+
+		m_PointLightIndexLUT.insert({ name, m_PointLights.size() });
+
+		PointLight* pointLight = new PointLight(color, position);
+		m_PointLights.push_back(pointLight);
+
+		return pointLight;
 	}
 
 	void Scene::setSunDirection(const glm::vec3& direction) {

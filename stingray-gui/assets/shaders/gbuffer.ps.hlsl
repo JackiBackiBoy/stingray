@@ -48,7 +48,6 @@ PSOutput main(PSInput input) {
     surfaceNormal = normalize(surfaceNormal * 2.0f - 1.0f);
     surfaceNormal = normalize(float3(mul(input.TBN, surfaceNormal)));
     output.normal = float4(surfaceNormal, 1.0f);
-    //output.normal = float4(normalize(input.normal), 1.0f);
 
     return output;
 }

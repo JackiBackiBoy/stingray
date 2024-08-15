@@ -73,6 +73,17 @@ namespace sr {
 		std::vector<ComPtr<ID3D12Resource>> backBuffers = {};
 	};
 
+	/* Helper Functions */
+	template<typename InternalType>
+	inline InternalType* toDX12Internal(const InternalHolder& holder) {
+		return (InternalType*)(holder.internalState.get());
+	}
+
+	template<typename InternalType>
+	inline InternalType* toDX12Internal(const RawInternalHolder& holder) {
+		return (InternalType*)(holder.internalState);
+	}
+
 	/* ------ Converter Functions ------ */
 	constexpr D3D12_BLEND toDX12Blend(Blend value) {
 		switch (value) {

@@ -4,7 +4,6 @@
 #include <chrono>
 
 #include "../input/input.hpp"
-
 #include "../rendering/renderpasses/accumulation_pass.hpp"
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 #include "../rendering/renderpasses/gbuffer_pass.hpp"
@@ -53,7 +52,6 @@ namespace sr {
 			lastTime = currentTime;
 
 			m_FrameInfo.dt = dt;
-			m_FrameInfo.cameraMoved = false;
 			m_FrameInfo.width = static_cast<uint32_t>(m_Width);
 			m_FrameInfo.height = static_cast<uint32_t>(m_Height);
 
@@ -113,7 +111,10 @@ namespace sr {
 	}
 
 	void Application::createDefaultTextures() {
-		const TextureInfo defaultAlbedoMapInfo = {
+		const uint32_t defaultAlbedoMapData = 0xffffffff;
+		const uint32_t defaultNormalMapData = 0xffff8080; // tangent space default normal
+
+		const TextureInfo texture1x1Info = {
 			.width = 1,
 			.height = 1,
 			.format = Format::R8G8B8A8_UNORM,
@@ -121,27 +122,18 @@ namespace sr {
 			.bindFlags = BindFlag::SHADER_RESOURCE
 		};
 
-		const uint32_t defaultAlbedoMapData = 0xffffffff;
 		const SubresourceData defaultAlbedoMapSubresource = {
 			.data = &defaultAlbedoMapData,
 			.rowPitch = sizeof(uint32_t)
 		};
-		m_Device->createTexture(defaultAlbedoMapInfo, m_DefaultAlbedoMap, &defaultAlbedoMapSubresource);
 
-		const TextureInfo defaultNormalMapInfo = {
-			.width = 1,
-			.height = 1,
-			.format = Format::R8G8B8A8_UNORM,
-			.usage = Usage::DEFAULT,
-			.bindFlags = BindFlag::SHADER_RESOURCE
-		};
-
-		const uint32_t defaultNormalMapData = 0xffff8080; // tangent space default normal
 		const SubresourceData defaultNormalMapSubresource = {
 			.data = &defaultNormalMapData,
 			.rowPitch = sizeof(uint32_t)
 		};
-		m_Device->createTexture(defaultNormalMapInfo, m_DefaultNormalMap, &defaultNormalMapSubresource);
+
+		m_Device->createTexture(texture1x1Info, m_DefaultAlbedoMap, &defaultAlbedoMapSubresource);
+		m_Device->createTexture(texture1x1Info, m_DefaultNormalMap, &defaultNormalMapSubresource);
 	}
 
 	void Application::createDefaultBuffers() {
@@ -275,16 +267,23 @@ namespace sr {
 		sphere->position = { -0.3f, 1.5f, 1.0f };
 		sphere->model = &m_CubeModel.getModel();
 
-		auto statue = m_Scene->createEntity("Statue");
-		statue->position = { 0.5f, 0.0f, 0.2f };
-		statue->scale = glm::vec3(1.0f);
-		statue->model = &m_StatueModel.getModel();
-		statue->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
-		statue->orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(90.0f)) * statue->orientation;
-		statue->color = { 0.5f, 0.6f, 0.7f };
+		m_StatueEntity = m_Scene->createEntity("Statue");
+		m_StatueEntity->position = { 0.5f, 0.0f, 0.2f };
+		m_StatueEntity->scale = glm::vec3(1.0f);
+		m_StatueEntity->model = &m_StatueModel.getModel();
+		m_StatueEntity->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
+		m_StatueEntity->orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, glm::radians(90.0f)) * m_StatueEntity->orientation;
+		m_StatueEntity->color = { 0.5f, 0.6f, 0.7f };
+
+		// Lights
+		auto light1 = m_Scene->createPointLight("Light 1", { 1.0f, 0.0f, 0.0f, 1.5f }, { 0.0f, 2.0f, 0.0f });
 	}
 
 	void Application::update(FrameInfo& frameInfo) {
+		// Entities update
+		m_StatueEntity->orientation = m_StatueEntity->orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, frameInfo.dt);
+		//m_StatueEntity->scale = glm::vec3(2.0f + cosf(t));
+
 		sr::input::update();
 		sr::input::KeyboardState keyboard = {};
 		sr::input::MouseState mouse = {};
@@ -294,19 +293,16 @@ namespace sr {
 
 		// Camera movement
 		Camera& camera = frameInfo.camera;
-		bool& cameraMoved = frameInfo.cameraMoved;
 		const float cameraMoveSpeed = 5.0f;
 		const float mouseSensitivity = 0.001f;
 
 		if (mouse.mouse3) {
 			if (mouse.deltaY != 0.0f) {
 				camera.orientation = camera.orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, mouse.deltaY * mouseSensitivity); // pitch
-				cameraMoved = true;
 			}
 
 			if (mouse.deltaX != 0.0f) {
 				camera.orientation = quatFromAxisAngle({ 0.0f, 1.0f, 0.0f }, mouse.deltaX * mouseSensitivity) * camera.orientation; // yaw
-				cameraMoved = true;
 			}
 		}
 
@@ -316,33 +312,26 @@ namespace sr {
 
 		if (sr::input::isDown(KeyCode::W)) {
 			camera.position += qForward * cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 		if (sr::input::isDown(KeyCode::A)) {
 			camera.position -= qRight * cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 		if (sr::input::isDown(KeyCode::S)) {
 			camera.position -= qForward * cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 		if (sr::input::isDown(KeyCode::D)) {
 			camera.position += qRight * cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 
 		if (sr::input::isDown(KeyCode::Space)) {
 			camera.position.y += cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 		if (sr::input::isDown(KeyCode::LeftControl)) {
 			camera.position.y -= cameraMoveSpeed * frameInfo.dt;
-			cameraMoved = true;
 		}
 
 		if (camera.verticalFOV != glm::radians((float)m_Settings.verticalFOV)) {
 			camera.verticalFOV = glm::radians((float)m_Settings.verticalFOV);
-			cameraMoved = true;
 		}
 
 		// Update per-frame data

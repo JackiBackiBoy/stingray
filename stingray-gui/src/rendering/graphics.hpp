@@ -290,12 +290,19 @@ namespace sr {
 		RenderTargetBlendState renderTargetBlendStates[8];
 	};
 
-	struct CommandList {
-		QueueType type = QueueType::DIRECT;
+	struct InternalHolder {
+		std::shared_ptr<void> internalState = nullptr;
+	};
+
+	struct RawInternalHolder {
 		void* internalState = nullptr;
 	};
 
-	struct Resource {
+	struct CommandList : public RawInternalHolder {
+		QueueType type = QueueType::DIRECT;
+	};
+
+	struct Resource : public InternalHolder {
 		enum class Type {
 			UNKNOWN,
 			BUFFER,
@@ -305,8 +312,6 @@ namespace sr {
 
 		void* mappedData = nullptr; // NOTE: Only valid for Usage::UPLOAD
 		size_t mappedSize = 0; // NOTE: For buffers: full buffer size; for textures: full texture size including subresources
-
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	struct BufferInfo {
@@ -351,9 +356,8 @@ namespace sr {
 		bool antialisedLineEnable = false;
 	};
 
-	struct Shader {
+	struct Shader : public InternalHolder {
 		ShaderStage stage = ShaderStage::NONE;
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	struct PipelineInfo {
@@ -368,9 +372,8 @@ namespace sr {
 		Format depthStencilFormat = Format::D32_FLOAT;
 	};
 
-	struct Pipeline {
+	struct Pipeline : public InternalHolder {
 		PipelineInfo info = {};
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	/* ------------------------- */
@@ -470,9 +473,8 @@ namespace sr {
 		// TODO: Add more
 	};
 
-	struct RTPipeline {
+	struct RTPipeline : public InternalHolder {
 		RTPipelineInfo info = {};
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	struct SubresourceData {
@@ -583,9 +585,8 @@ namespace sr {
 		float maxLOD = std::numeric_limits<float>::max();
 	};
 
-	struct Sampler {
+	struct Sampler : public InternalHolder {
 		SamplerInfo info = {};
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	struct SwapChainInfo {
@@ -597,11 +598,10 @@ namespace sr {
 		bool vsync = true;
 	};
 
-	struct SwapChain {
+	struct SwapChain : public InternalHolder {
 		SwapChainInfo info = {};
 
 		Texture backbuffer = {}; // TODO: Temporary fix
-		std::shared_ptr<void> internalState = nullptr;
 	};
 
 	struct Viewport {

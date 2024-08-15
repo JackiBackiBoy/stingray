@@ -114,7 +114,7 @@ namespace sr::rtaopass {
 		device.createRTAS(rtTLASInfo, g_RayTracingTLAS);
 	}
 
-	static void writeTLASInstances(GraphicsDevice& device, const std::vector<Entity*>& entities) {
+	static void writeTLASInstances(GraphicsDevice& device) {
 		for (uint32_t i = 0; i < g_TLASInstances.size(); ++i) {
 			void* dataSection = (uint8_t*)g_InstanceBuffer.mappedData + i * g_InstanceBuffer.info.stride;
 			device.writeTLASInstance(g_TLASInstances[i], dataSection);
@@ -124,7 +124,7 @@ namespace sr::rtaopass {
 	static void initialize(GraphicsDevice& device, const std::vector<Entity*>& entities) {
 		createBLASes(device, entities); // NOTE: We also create instance buffer here
 		createTLAS(device);
-		writeTLASInstances(device, entities);
+		writeTLASInstances(device);
 
 		// Ray-tracing shader library
 		device.createShader(ShaderStage::LIBRARY, "assets/shaders/rtao.hlsl", g_RayTracingShaderLibrary);
@@ -218,6 +218,30 @@ namespace sr::rtaopass {
 			device.buildRTAS(g_RayTracingTLAS, nullptr, cmdList);
 			builtAS = true;
 		}
+
+		// Update transform data
+		const auto& entities = scene.getEntities();
+
+		// TODO: Only update if changed
+		size_t instanceIndex = 0;
+
+		for (const auto& entity : entities) {
+			glm::mat4 scale = glm::scale(glm::mat4(1.0f), entity->scale);
+			glm::mat4 rotation = quatToMat4(entity->orientation);
+			glm::mat4 translation = glm::translate(glm::mat4(1.0f), entity->position);
+			glm::mat4 transformation = glm::transpose(translation * rotation * scale); // convert to row-major representation
+
+			for (const auto& mesh : entity->model->meshes) {
+				RayTracingTLAS::Instance& instance = g_TLASInstances[instanceIndex];
+				std::memcpy(instance.transform, &transformation[0][0], sizeof(instance.transform));
+
+				++instanceIndex;
+			}
+		}
+
+		writeTLASInstances(device);
+		// TLAS refitting
+		device.buildRTAS(g_RayTracingTLAS, &g_RayTracingTLAS, cmdList);
 
 		auto rtOutputAttachment = graph.getAttachment("AmbientOcclusion");
 		auto positionAttachment = graph.getAttachment("Position");
