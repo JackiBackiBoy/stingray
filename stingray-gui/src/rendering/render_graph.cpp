@@ -170,7 +170,6 @@ namespace sr {
 			}
 			else {
 				m_Device.beginRenderPass(passInfo, cmdList, clearTargets);
-
 				const uint32_t width = outputAttachments[0]->info.width;
 				const uint32_t height = outputAttachments[0]->info.height;
 				const Viewport viewport = {

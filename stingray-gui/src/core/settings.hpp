@@ -10,5 +10,6 @@ namespace sr {
 		bool enableRayTracing = true;
 		float ssmMinBias = 0.0001f;
 		float ssmMaxBias = 0.005f;
+		int numCascadeLevels = 3;
 	};
 }

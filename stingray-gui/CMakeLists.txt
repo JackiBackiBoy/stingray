@@ -44,6 +44,8 @@ set(SOURCE_FILES
     # Core
     ${SOURCE_DIR}/core/application.cpp
     ${SOURCE_DIR}/core/application.hpp
+    ${SOURCE_DIR}/core/camera.cpp
+    ${SOURCE_DIR}/core/camera.hpp
     ${SOURCE_DIR}/core/enum_flags.hpp
     ${SOURCE_DIR}/core/frame_info.hpp
     ${SOURCE_DIR}/core/settings.hpp

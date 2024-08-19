@@ -1,25 +1,29 @@
 #pragma once
 
 #include "entity.hpp"
+#include "../core/camera.hpp"
 
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace sr {
-	struct alignas(16) PointLight {
+	struct PointLight {
 		PointLight() = default;
 		PointLight(const glm::vec4& color, const glm::vec3& position) :
 			color(color), position(position) {}
 
 		glm::vec4 color = {}; // NOTE: w-component is intensity
 		glm::vec3 position = {};
+		uint32_t pad1 = 0;
 	};
 	
 	class Scene {
 	public:
-		Scene();
+		Scene(Camera& camera);
 		~Scene();
+
+		void update();
 
 		Entity* createEntity(const std::string& name);
 		PointLight* createPointLight(const std::string& name, const glm::vec4& color, const glm::vec3& position);
@@ -31,7 +35,7 @@ namespace sr {
 		inline const std::vector<PointLight*>& getPointLights() const { return m_PointLights; }
 		inline glm::vec4 getSunColor() const { return m_SunLight.color; }
 		inline glm::vec3 getSunDirection() const { return m_SunLight.direction; }
-		inline glm::mat4 getSunLSMatrix() const { return m_SunLight.lightSpaceMatrix; }
+		inline glm::mat4 getSunViewMatrix() const { return m_SunLight.viewMatrix; }
 		inline DirectionLight& getSunLight() { return m_SunLight; }
 
 		static constexpr int MAX_POINT_LIGHTS = 32;
@@ -39,10 +43,13 @@ namespace sr {
 	private:
 		void updateLSMatrix();
 
+		Camera& m_Camera;
+
 		std::vector<Entity*> m_Entities = {};
 		std::vector<PointLight*> m_PointLights = {};
 		std::unordered_map<std::string, size_t> m_EntityIndexLUT = {};
 		std::unordered_map<std::string, size_t> m_PointLightIndexLUT = {};
+		bool m_UpdateLSMatrix = false;
 
 		DirectionLight m_SunLight = {};
 	};

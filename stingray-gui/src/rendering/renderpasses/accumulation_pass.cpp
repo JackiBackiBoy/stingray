@@ -48,8 +48,8 @@ namespace sr::accumulationpass {
 
 		const Camera& lastCamera = g_LastCamera.value();
 
-		return (camera.projectionMatrix != lastCamera.projectionMatrix ||
-				camera.viewMatrix != lastCamera.viewMatrix);
+		return (camera.getProjMatrix() != lastCamera.getProjMatrix() ||
+				camera.getViewMatrix() != lastCamera.getViewMatrix());
 	}
 
 	void onExecute(PassExecuteInfo& executeInfo) {
@@ -62,7 +62,7 @@ namespace sr::accumulationpass {
 			g_Initialized = true;
 		}
 
-		const Camera& camera = executeInfo.frameInfo->camera;
+		const Camera* camera = executeInfo.frameInfo->camera;
 
 		// Reset the accumulation if anything has moved
 		// TODO: We can make the check for entity movement faster
@@ -70,7 +70,7 @@ namespace sr::accumulationpass {
 			g_AccumulationCount = 0;
 		//}
 
-		g_LastCamera = executeInfo.frameInfo->camera;
+		g_LastCamera = *executeInfo.frameInfo->camera;
 
 		auto thisAttachment = graph.getAttachment("AOAccumulation");
 		auto aoAttachment = graph.getAttachment("AmbientOcclusion");

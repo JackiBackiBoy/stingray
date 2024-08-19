@@ -6,6 +6,9 @@ namespace sr::fstripass {
 	struct alignas(256) LightingUBO {
 		DirectionLight directionLight = {};
 		uint32_t numPointLights = 0;
+		uint32_t pad1 = 0;
+		uint32_t pad2 = 0;
+		uint32_t pad3 = 0;
 		PointLight pointLights[Scene::MAX_POINT_LIGHTS] = {};
 	};
 
@@ -49,7 +52,7 @@ namespace sr::fstripass {
 		};
 
 		for (size_t i = 0; i < GraphicsDevice::NUM_BUFFERS; ++i) {
-			device.createBuffer(lightingUBOInfo, g_LightingUBOs[i], nullptr);
+			device.createBuffer(lightingUBOInfo, g_LightingUBOs[i], &g_LightingUBOData);
 		}
 	}
 
@@ -92,6 +95,7 @@ namespace sr::fstripass {
 			g_LightingUBOData.pointLights[i] = *pointLights[i];
 		}
 
+		int i = sizeof(DirectionLight);
 		std::memcpy(g_LightingUBOs[device.getBufferIndex()].mappedData, &g_LightingUBOData, sizeof(g_LightingUBOData));
 
 		// Drawing

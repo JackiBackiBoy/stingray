@@ -1,4 +1,5 @@
 #define MAX_POINT_LIGHTS 32
+#define MAX_CASCADES 8
 
 struct PSInput {
     float4 pos: SV_Position;
@@ -18,9 +19,12 @@ struct PerFrameData {
 };
 
 struct DirectionLight {
-    float4x4 lightSpaceMatrix;
+    float4x4 cascadeProjections[MAX_CASCADES];
+    float4x4 viewMatrix;
     float4 color;
+    float4 cascadeDistances[2];
     float3 direction;
+    uint numCascades;
 };
 
 struct PointLight {
@@ -32,6 +36,9 @@ struct PointLight {
 struct LightingUBO {
     DirectionLight directionLight;
     uint numPointLights;
+    uint pad1;
+    uint pad2;
+    uint pad3;
     PointLight pointLights[MAX_POINT_LIGHTS];
 };
 
@@ -57,10 +64,22 @@ SamplerComparisonState g_DepthSampler : register(s1);
 static const float AMBIENT_TERM = 0.3f;
 
 float calcShadow(DirectionLight light, float3 fragPos, float3 normal) {
-    Texture2D<float4> depthTexture = ResourceDescriptorHeap[pushConstant.depthIndex];
-    Texture2D<float4> shadowTexture = ResourceDescriptorHeap[pushConstant.shadowMapIndex];
+    float4 fragPosLightView = mul(g_PerFrameData.viewMatrix, float4(fragPos, 1.0f));
+    float depthValue = abs(fragPosLightView.z);
 
-    float4 fragPosLS = mul(light.lightSpaceMatrix, float4(fragPos, 1.0f));
+    int cascadeLayer = -1;
+    float2 texCoordOrigin = float2(0, 0);
+    float cascadeDistances[MAX_CASCADES] = (float[MAX_CASCADES])light.cascadeDistances;
+
+    for (int i = 0; i < light.numCascades; ++i) {
+        if (depthValue < cascadeDistances[i]) {
+            cascadeLayer = i;
+            texCoordOrigin = float2(0.5f * (i % 2), 0.5f * (i / 2));
+            break;
+        }
+    }
+
+    float4 fragPosLS = mul(light.cascadeProjections[cascadeLayer], float4(fragPos, 1.0f));
     float3 projCoords = fragPosLS.xyz / fragPosLS.w; // perspective division
     projCoords = float3(projCoords.xy * 0.5f + 0.5f, projCoords.z);
     projCoords.y = 1.0f - projCoords.y;
@@ -69,19 +88,18 @@ float calcShadow(DirectionLight light, float3 fragPos, float3 normal) {
     float bias = lerp(pushConstant.shadowMaxBias, pushConstant.shadowMinBias, diffuseFactor);
 
     float currentDepth = projCoords.z;
-    // float shadowDepth = shadowTexture.SampleCmpLevelZero(g_DepthSampler, projCoords.xy, currentDepth - bias).r;
 
+    Texture2D<float4> shadowTexture = ResourceDescriptorHeap[pushConstant.shadowMapIndex];
     float shadow = 0.0f;
-    float texelSize = 1.0f / 2048;
-    for (float y = -1.5f; y <= 1.5f; y += 1.0f) {
-        for (float x = -1.5f; x <= 1.5f; x += 1.0f) {
-            shadow += shadowTexture.SampleCmpLevelZero(g_DepthSampler, projCoords.xy + float2(x, y) * texelSize, currentDepth - bias).r;
+    float texelSize = 1.0f / 4096;
+
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            shadow += shadowTexture.SampleCmpLevelZero(g_DepthSampler, texCoordOrigin + projCoords.xy * 0.5f + float2(x, y) * texelSize, currentDepth - bias).r;
         }
     }
 
-    shadow /= 16.0f;
-
-    //float shadow = shadowDepth + bias < currentDepth ? 0.0f : 1.0f;
+    shadow /= 9.0f;
 
     return shadow;
 }

@@ -128,7 +128,7 @@ namespace sr {
 				const std::vector<double> translationData = gltfModel.nodes[i].translation;
 
 				if (!translationData.empty()) {
-					translation = glm::translate({ 1.0f }, glm::vec3(translationData[0], translationData[1], translationData[2]));
+					translation = glm::translate({ 1.0f }, glm::vec3(translationData[2], translationData[1], translationData[0]));
 				}
 
 				// TODO: We should probably support meshes having more than 1 primitive,
@@ -143,7 +143,7 @@ namespace sr {
 
 					const float* positions = reinterpret_cast<const float*>(
 						&posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset]
-						);
+					);
 
 					// Normals
 					const tinygltf::Accessor& normalAccessor = gltfModel.accessors[gltfPrimitive.attributes["NORMAL"]];

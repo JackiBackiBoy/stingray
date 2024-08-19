@@ -275,7 +275,7 @@ namespace sr::uipass {
 		auto positionImage = createImage(&renderGraph.getAttachment("Position")->texture, 0, 0, "Position", mainLayout);
 		auto albedoImage = createImage(&renderGraph.getAttachment("Albedo")->texture, 0, 0, "Albedo", mainLayout);
 		auto normalTexture = createImage(&renderGraph.getAttachment("Normal")->texture, 0, 0, "Normal", mainLayout);
-		auto shadowTexture = createImage(&renderGraph.getAttachment("ShadowMap")->texture, 200, 200, "Shadow Map", mainLayout);
+		auto shadowTexture = createImage(&renderGraph.getAttachment("ShadowMap")->texture, 500, 500, "Shadow Map Atlas", mainLayout);
 		auto aoImage = createImage(&renderGraph.getAttachment("AmbientOcclusion")->texture, 0, 0, "RTAO", mainLayout);
 		auto aoAccumulatedImage = createImage(&renderGraph.getAttachment("AOAccumulation")->texture, 0, 0, "RTAO (Accumulation)", mainLayout);
 	}

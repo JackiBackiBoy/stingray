@@ -51,6 +51,8 @@ namespace sr {
 		int m_Height = 0;
 		std::string m_Title = {};
 		Settings m_Settings = {};
+		
+		std::unique_ptr<Camera> m_Camera = {};
 
 		std::unique_ptr<Window> m_Window = {};
 		std::unique_ptr<GraphicsDevice> m_Device = {};
@@ -68,6 +70,7 @@ namespace sr {
 		Asset m_CubeModel = {};
 		Asset m_PlaneModel = {};
 		Asset m_StatueModel = {};
+		Asset m_MainSceneModel = {};
 
 		// Default resources
 		Texture m_DefaultAlbedoMap = {};
