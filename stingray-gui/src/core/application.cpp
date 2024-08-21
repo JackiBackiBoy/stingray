@@ -8,7 +8,7 @@
 #include "../rendering/renderpasses/fullscreen_tri_pass.hpp"
 #include "../rendering/renderpasses/gbuffer_pass.hpp"
 #include "../rendering/renderpasses/rtao_pass.hpp"
-#include "../rendering/renderpasses/simple_shadow_pass.hpp"
+#include "../rendering/renderpasses/csm_pass.hpp"
 #include "../rendering/renderpasses/ui_pass.hpp"
 
 #if defined(SR_WINDOWS)
@@ -191,7 +191,7 @@ namespace sr {
 		auto& simpleShadowPass = m_RenderGraph->addPass("SimpleShadowPass");
 		simpleShadowPass.addOutputAttachment("ShadowMap", { AttachmentType::DEPTH_STENCIL, shadowMapDim, shadowMapDim, 1, Format::D16_UNORM });
 		simpleShadowPass.setExecuteCallback([&](PassExecuteInfo& executeInfo) {
-			sr::simpleshadowpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
+			sr::csmpass::onExecute(executeInfo, m_PerFrameUBOs[m_Device->getBufferIndex()], *m_Scene);
 		});
 
 		auto& rtaoPass = m_RenderGraph->addPass("RTAOPass");
@@ -251,22 +251,6 @@ namespace sr {
 		// Cornell box
 		const float cornellScale = 4.0f;
 
-		//auto cornellWallLeft = m_Scene->createEntity("WallLeft");
-		//cornellWallLeft->position.x = -cornellScale * 0.5f + 0.01f;
-		//cornellWallLeft->position.y = cornellScale * 0.5f;
-		//cornellWallLeft->scale = glm::vec3(cornellScale);
-		//cornellWallLeft->model = &m_PlaneModel.getModel();
-		//cornellWallLeft->orientation = quatFromAxisAngle({ 0.0f, 0.0f, 1.0f }, glm::radians(-90.0f));
-		//cornellWallLeft->color = { 1.0f, 0.0f, 0.0f };
-
-		//auto cornellWallBack = m_Scene->createEntity("WallBack");
-		//cornellWallBack->position.y = cornellScale * 0.5f;
-		//cornellWallBack->position.z = cornellScale * 0.5f;
-		//cornellWallBack->scale = glm::vec3(cornellScale);
-		//cornellWallBack->model = &m_PlaneModel.getModel();
-		//cornellWallBack->orientation = quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, glm::radians(-90.0f));
-		//cornellWallBack->color = { 0.229f, 0.531f, 0.0f };
-
 		auto sphere = m_Scene->createEntity("Sphere");
 		sphere->scale = glm::vec3(0.5f);
 		sphere->position = { -0.3f, 1.5f, 1.0f };
@@ -287,7 +271,6 @@ namespace sr {
 	void Application::update(FrameInfo& frameInfo) {
 		// Entities update
 		m_StatueEntity->orientation = m_StatueEntity->orientation * quatFromAxisAngle({ 1.0f, 0.0f, 0.0f }, frameInfo.dt);
-		//m_StatueEntity->scale = glm::vec3(2.0f + cosf(t));
 
 		sr::input::update();
 		sr::input::KeyboardState keyboard = {};

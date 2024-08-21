@@ -90,8 +90,8 @@ set(SOURCE_FILES
     ${SOURCE_DIR}/rendering/renderpasses/gbuffer_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/rtao_pass.hpp
-    ${SOURCE_DIR}/rendering/renderpasses/simple_shadow_pass.cpp
-    ${SOURCE_DIR}/rendering/renderpasses/simple_shadow_pass.hpp
+    ${SOURCE_DIR}/rendering/renderpasses/csm_pass.cpp
+    ${SOURCE_DIR}/rendering/renderpasses/csm_pass.hpp
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.cpp
     ${SOURCE_DIR}/rendering/renderpasses/ui_pass.hpp
 

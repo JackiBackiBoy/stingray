@@ -4,6 +4,6 @@
 #include "../../data/scene.hpp"
 
 // Simple Shadow Pass (SSM)
-namespace sr::simpleshadowpass {
+namespace sr::csmpass {
 	void onExecute(PassExecuteInfo& executeInfo, Buffer& perFrameUBO, Scene& scene);
 }

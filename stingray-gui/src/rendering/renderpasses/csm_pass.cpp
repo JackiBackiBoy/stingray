@@ -1,9 +1,9 @@
-#include "simple_shadow_pass.hpp"
+#include "csm_pass.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 
-namespace sr::simpleshadowpass {
+namespace sr::csmpass {
 	struct PushConstant {
 		glm::mat4 modelMatrix = { 1.0f };
 		glm::mat4 lightSpaceMatrix = { 1.0f };
@@ -45,7 +45,7 @@ namespace sr::simpleshadowpass {
 		device.createPipeline(pipelineInfo, g_Pipeline);
 	}
 
-	enum class CascadePartitioning {
+	enum class CascadePartitioning : uint8_t {
 		LINEAR,
 		QUADRATIC
 	};
@@ -57,7 +57,7 @@ namespace sr::simpleshadowpass {
 		// TODO: Handle case where numLevels = 1
 
 		if (partion == CascadePartitioning::QUADRATIC) {
-			int powTwoSum = (1 << (numLevels + 1)) - 1;  // Sum of 1 + 2 + 4 + 8 + ...
+			const int powTwoSum = (1 << (numLevels + 1)) - 1;  // Sum of 1 + 2 + 4 + 8 + ...
 			const float totalLevelErrorPercentage = 2.0f - static_cast<float>(powTwoSum) / (1 << numLevels);
 			const float perLevelError = (totalLevelErrorPercentage * zRange) / (numLevels - 1);
 
@@ -154,7 +154,7 @@ namespace sr::simpleshadowpass {
 				{ 0.0f, 1.0f, 0.0f }
 			);
 
-			const std::array<glm::vec4, 8> lightViewCascadeCorners = {
+			const glm::vec4 lightViewCascadeCorners[8] = {
 				lightView * glm::vec4(cascadeFrustum.corners[0], 1.0f),
 				lightView * glm::vec4(cascadeFrustum.corners[1], 1.0f),
 				lightView * glm::vec4(cascadeFrustum.corners[2], 1.0f),

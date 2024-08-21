@@ -7,7 +7,7 @@
 #include "enum_flags.hpp"
 
 namespace sr {
-	enum class WindowFlag : uint32_t {
+	enum class WindowFlag : uint8_t {
 		NONE = 0,
 		RESIZEABLE = 1 << 0,
 		HCENTER = 1 << 1,

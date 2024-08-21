@@ -8,7 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace sr {
-	enum class DataType {
+	enum class DataType : uint8_t {
 		UNKNOWN,
 		IMAGE,
 		MODEL,

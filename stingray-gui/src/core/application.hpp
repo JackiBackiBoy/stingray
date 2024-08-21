@@ -75,8 +75,6 @@ namespace sr {
 		// Default resources
 		Texture m_DefaultAlbedoMap = {};
 		Texture m_DefaultNormalMap = {};
-
-		// TODO: Move this to a scene class or something
 		std::unique_ptr<Scene> m_Scene = {};
 	};
 }

@@ -8,13 +8,13 @@
 #include "../core/enum_flags.hpp"
 
 namespace sr {
-	enum class GraphicsAPI {
+	enum class GraphicsAPI : uint8_t {
 		DX12, // TODO: Work in progress
 		Metal, // TODO: Not supported
 		Vulkan // TODO: Not supported
 	};
 
-	enum class BindFlag {
+	enum class BindFlag : uint8_t {
 		NONE = 0,
 		VERTEX_BUFFER = 1 << 0,
 		INDEX_BUFFER = 1 << 1,
@@ -26,7 +26,7 @@ namespace sr {
 		SHADING_RATE = 1 << 7,
 	};
 
-	enum QueueType {
+	enum QueueType : uint8_t {
 		DIRECT,
 		COPY,
 		COMPUTE,
@@ -34,7 +34,7 @@ namespace sr {
 		QUEUE_COUNT
 	};
 
-	enum class MiscFlag {
+	enum class MiscFlag : uint8_t {
 		NONE = 0,
 		TEXTURECUBE = 1 << 0,
 		INDIRECT_ARGS = 1 << 1,
@@ -42,7 +42,7 @@ namespace sr {
 		BUFFER_STRUCTURED = 1 << 3,
 	};
 
-	enum class ShaderStage {
+	enum class ShaderStage : uint8_t {
 		NONE = 0,
 		VERTEX = 1 << 0,
 		PIXEL = 1 << 1,
@@ -50,7 +50,7 @@ namespace sr {
 		LIBRARY = 1 << 3,
 	};
 
-	enum class Blend {
+	enum class Blend : uint8_t {
 		ZERO,
 		ONE,
 		SRC_COLOR,
@@ -70,7 +70,7 @@ namespace sr {
 		INV_SRC1_ALPHA,
 	};
 
-	enum class BlendOp {
+	enum class BlendOp : uint8_t {
 		ADD,
 		SUBTRACT,
 		REV_SUBTRACT,
@@ -78,7 +78,7 @@ namespace sr {
 		MAX,
 	};
 
-	enum class ComparisonFunc {
+	enum class ComparisonFunc : uint8_t {
 		NEVER,
 		LESS,
 		EQUAL,
@@ -89,23 +89,23 @@ namespace sr {
 		ALWAYS,
 	};
 
-	enum class DepthWriteMask {
+	enum class DepthWriteMask : uint8_t {
 		ZERO,	// Disables depth write
 		ALL,	// Enables depth write
 	};
 
-	enum class FillMode {
+	enum class FillMode : uint8_t {
 		WIREFRAME,
 		SOLID
 	};
 
-	enum class CullMode {
+	enum class CullMode : uint8_t {
 		NONE,
 		FRONT,
 		BACK,
 	};
 
-	enum class Filter {
+	enum class Filter : uint8_t {
 		MIN_MAG_MIP_POINT,
 		MIN_MAG_POINT_MIP_LINEAR,
 		MIN_POINT_MAG_LINEAR_MIP_POINT,
@@ -144,7 +144,7 @@ namespace sr {
 		MAXIMUM_ANISOTROPIC,
 	};
 
-	enum class Format {
+	enum class Format : uint8_t {
 		UNKNOWN,
 
 		R32G32B32A32_FLOAT,
@@ -224,17 +224,17 @@ namespace sr {
 		NV12,				// video YUV420; SRV Luminance aspect: R8_UNORM, SRV Chrominance aspect: R8G8_UNORM
 	};
 
-	enum class InputClass {
+	enum class InputClass : uint8_t {
 		PER_VERTEX_DATA,
 		PER_INSTANCE_DATA,
 	};
 
-	enum class RayTracingASType {
+	enum class RayTracingASType : uint8_t {
 		TLAS, // Top-Level Acceleration Structure
 		BLAS, // Bottom-Level Acceleration Structure
 	};
 
-	enum class ResourceState {
+	enum class ResourceState : uint8_t {
 		UNDEFINED = 0,
 		SHADER_RESOURCE = 1 << 0,
 		UNORDERED_ACCESS = 1 << 1,
@@ -246,7 +246,7 @@ namespace sr {
 		COPY_DST = 1 << 6, // copy to
 	};
 
-	enum class BorderColor {
+	enum class BorderColor : uint8_t {
 		TRANSPARENT_BLACK,
 		OPAQUE_BLACK,
 		OPAQUE_WHITE,
@@ -259,7 +259,7 @@ namespace sr {
 		DSV, // depth stencil view
 	};
 
-	enum class TextureAddressMode {
+	enum class TextureAddressMode : uint8_t {
 		WRAP,
 		MIRROR,
 		CLAMP,
@@ -267,7 +267,7 @@ namespace sr {
 		MIRROR_ONCE,
 	};
 
-	enum class Usage {
+	enum class Usage : uint8_t {
 		DEFAULT, // CPU no access, GPU read/write. TIP: Useful for resources that do not change that often or at all
 		UPLOAD, // CPU write, GPU read. TIP: Useful for resources that need to be updated frequently (e.g. uniform buffer). Also allows for persistent mapping
 		COPY // Copy from GPU to CPU
